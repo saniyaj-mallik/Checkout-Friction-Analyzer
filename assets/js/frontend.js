@@ -26,46 +26,98 @@
     });
 
     // Track form field interactions
-    $('form.checkout').on('change', 'input, select, textarea', function() {
-        const field = $(this);
-        const fieldName = field.attr('name');
-        const fieldType = field.attr('type');
-        const fieldValue = field.val();
-
-        trackFrictionPoint('field_interaction', {
-            field_name: fieldName,
-            field_type: fieldType,
-            field_value: fieldValue
+    $('form.checkout input, form.checkout select, form.checkout textarea').on('change', function() {
+        trackFriction('field_change', {
+            field_id: $(this).attr('id'),
+            field_name: $(this).attr('name'),
+            field_type: $(this).attr('type'),
+            value: $(this).val()
         });
     });
 
     // Track form validation errors
-    $('form.checkout').on('checkout_error', function(event, error_message) {
-        trackFrictionPoint('validation_error', {
-            error_message: error_message
+    $(document.body).on('checkout_error', function() {
+        trackFriction('validation_error', {
+            errors: $('.woocommerce-error li').map(function() {
+                return $(this).text();
+            }).get()
         });
     });
 
-    // Track checkout step changes
-    let currentStep = 'cart';
-    $('body').on('updated_checkout', function() {
-        const newStep = getCurrentCheckoutStep();
-        if (newStep !== currentStep) {
-            trackFrictionPoint('step_change', {
-                from_step: currentStep,
-                to_step: newStep
+    // Track cart updates
+    $(document.body).on('added_to_cart removed_from_cart', function(event, fragments, cart_hash, $button) {
+        trackFriction(event.type, {
+            product_id: $button.data('product_id'),
+            quantity: $button.data('quantity')
+        });
+    });
+
+    // Track checkout steps
+    $('form.checkout').on('checkout_place_order', function() {
+        trackFriction('checkout_submit', {
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    // Track payment method changes
+    $('form.checkout').on('payment_method_selected', function() {
+        trackFriction('payment_method_change', {
+            method: $('input[name="payment_method"]:checked').val()
+        });
+    });
+
+    // Track shipping method changes
+    $(document.body).on('updated_checkout', function() {
+        trackFriction('shipping_method_change', {
+            method: $('input[name="shipping_method[0]"]:checked').val()
+        });
+    });
+
+    // Track form abandonment
+    let formStartTime = new Date();
+    $(window).on('beforeunload', function() {
+        if ($('form.checkout').length) {
+            trackFriction('form_abandonment', {
+                time_spent: (new Date() - formStartTime) / 1000,
+                fields_filled: $('form.checkout input[value!=""]').length
             });
-            currentStep = newStep;
         }
     });
 
-    // Track abandonment
-    $(window).on('beforeunload', function() {
-        if (isCheckoutPage() && !isOrderComplete()) {
-            trackFrictionPoint('abandonment', {
-                last_step: currentStep
+    // Track field focus/blur
+    $('form.checkout input, form.checkout select, form.checkout textarea').on('focus blur', function(e) {
+        trackFriction('field_' + e.type, {
+            field_id: $(this).attr('id'),
+            field_name: $(this).attr('name')
+        });
+    });
+
+    // Track scrolling
+    let lastScrollTop = 0;
+    $(window).on('scroll', function() {
+        let currentScroll = $(this).scrollTop();
+        if (Math.abs(currentScroll - lastScrollTop) > 100) {
+            trackFriction('scroll', {
+                direction: currentScroll > lastScrollTop ? 'down' : 'up',
+                position: currentScroll
             });
+            lastScrollTop = currentScroll;
         }
+    });
+
+    // Track time spent
+    let startTime = new Date();
+    setInterval(function() {
+        trackFriction('time_spent', {
+            seconds: Math.floor((new Date() - startTime) / 1000)
+        });
+    }, 30000);
+
+    // Track device and browser info
+    trackFriction('page_view', {
+        user_agent: navigator.userAgent,
+        screen_width: window.innerWidth,
+        screen_height: window.innerHeight
     });
 
     // Helper functions

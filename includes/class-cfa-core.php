@@ -28,8 +28,20 @@ class Core {
 
 		// Frontend hooks
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
+		
+		// Cart tracking
+		add_action( 'woocommerce_add_to_cart', array( $this, 'track_add_to_cart' ), 10, 6 );
+		add_action( 'woocommerce_remove_cart_item', array( $this, 'track_remove_from_cart' ), 10, 2 );
+		
+		// Checkout tracking
+		add_action( 'woocommerce_before_checkout_process', array( $this, 'track_checkout_start' ) );
 		add_action( 'woocommerce_checkout_process', array( $this, 'track_checkout_process' ) );
-		add_action( 'woocommerce_checkout_order_processed', array( $this, 'track_order_processed' ) );
+		add_action( 'woocommerce_checkout_order_processed', array( $this, 'track_order_processed' ), 10, 3 );
+		add_action( 'woocommerce_checkout_order_created', array( $this, 'track_order_created' ), 10, 1 );
+		
+		// AJAX handlers
+		add_action( 'wp_ajax_cfa_track_friction', array( $this, 'handle_track_friction' ) );
+		add_action( 'wp_ajax_nopriv_cfa_track_friction', array( $this, 'handle_track_friction' ) );
 	}
 
 	/**
@@ -103,6 +115,71 @@ class Core {
 			array(
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'cfa-nonce' ),
+			)
+		);
+	}
+
+	/**
+	 * Track add to cart
+	 *
+	 * @param string $cart_item_key Cart item key.
+	 * @param int    $product_id    Product ID.
+	 * @param int    $quantity      Quantity.
+	 * @param int    $variation_id  Variation ID.
+	 * @param array  $variation     Variation data.
+	 * @param array  $cart_item_data Cart item data.
+	 */
+	public function track_add_to_cart( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) {
+		$this->log_friction_point(
+			'add_to_cart',
+			array(
+				'product_id'    => $product_id,
+				'variation_id'  => $variation_id,
+				'quantity'      => $quantity,
+				'cart_item_key' => $cart_item_key,
+			)
+		);
+	}
+
+	/**
+	 * Track remove from cart
+	 *
+	 * @param string $cart_item_key Cart item key.
+	 * @param object $cart          Cart object.
+	 */
+	public function track_remove_from_cart( $cart_item_key, $cart ) {
+		$this->log_friction_point(
+			'remove_from_cart',
+			array(
+				'cart_item_key' => $cart_item_key,
+			)
+		);
+	}
+
+	/**
+	 * Track checkout start
+	 */
+	public function track_checkout_start() {
+		$this->log_friction_point(
+			'checkout_start',
+			array(
+				'timestamp' => current_time( 'mysql' ),
+			)
+		);
+	}
+
+	/**
+	 * Track order created
+	 *
+	 * @param WC_Order $order Order object.
+	 */
+	public function track_order_created( $order ) {
+		$this->log_friction_point(
+			'order_created',
+			array(
+				'order_id'    => $order->get_id(),
+				'order_total' => $order->get_total(),
+				'items'       => count( $order->get_items() ),
 			)
 		);
 	}
@@ -235,5 +312,21 @@ class Core {
 			ORDER BY count DESC
 			LIMIT 10"
 		);
+	}
+
+	/**
+	 * Handle AJAX track friction request
+	 */
+	public function handle_track_friction() {
+		check_ajax_referer( 'cfa-nonce', 'nonce' );
+
+		$type = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '';
+		$data = isset( $_POST['data'] ) ? json_decode( stripslashes( $_POST['data'] ), true ) : array();
+
+		if ( ! empty( $type ) ) {
+			$this->log_friction_point( $type, $data );
+		}
+
+		wp_send_json_success();
 	}
 } 
