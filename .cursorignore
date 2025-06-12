@@ -1,0 +1,31 @@
+# Build and dependency directories
+node_modules/
+vendor/
+dist/
+build/
+
+# Cache and temporary files
+.cache/
+.temp/
+tmp/
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db 
