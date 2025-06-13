@@ -9,7 +9,7 @@
     border-radius: 4px;
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
 }
 
 /* Overview Stats */
@@ -122,4 +122,52 @@
     .cfa-settings .form-table th {
         width: auto;
     }
-} 
+}
+
+.cfa-error-list {
+    margin-top: 15px;
+    padding-left: 0;
+    list-style: none;
+}
+
+.cfa-error-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.cfa-error-list li:last-child {
+    border-bottom: none;
+}
+
+.cfa-error-message {
+    flex: 1;
+    font-size: 16px;
+    color: #333;
+}
+
+.cfa-badge {
+    display: inline-block;
+    min-width: 32px;
+    padding: 4px 10px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 16px;
+    text-align: center;
+    color: #fff;
+}
+
+.cfa-badge-high {
+    background: #dc3545;
+}
+
+.cfa-badge-medium {
+    background: #ffc107;
+    color: #333;
+}
+
+.cfa-badge-low {
+    background: #28a745;
+}

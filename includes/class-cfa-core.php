@@ -91,6 +91,44 @@ class Core {
 			'3.7.0',
 			true
 		);
+
+		// Localize cfaData for admin.js
+		$chart_data = $this->get_admin_chart_data();
+		wp_localize_script(
+			'cfa-admin',
+			'cfaData',
+			$chart_data
+		);
+	}
+
+	/**
+	 * Get chart data for admin dashboard
+	 *
+	 * @return array
+	 */
+	private function get_admin_chart_data() {
+		// Placeholder: last 7 days labels
+		$labels = array();
+		for ( $i = 6; $i >= 0; $i-- ) {
+			$labels[] = date( 'M j', strtotime( "-$i days" ) );
+		}
+
+		// Placeholder abandonment rate data (simulate some drop-off)
+		$abandonment_data = array( 20, 25, 30, 28, 22, 18, 15 );
+		// Placeholder friction points
+		$friction_labels = array( 'Email Error', 'Invalid ZIP', 'Missing Phone', 'Coupon Error' );
+		$friction_data = array( 12, 8, 5, 3 );
+		// Placeholder checkout time data (in seconds)
+		$checkout_time_data = array( 120, 110, 130, 125, 140, 115, 100 );
+
+		return array(
+			'chartLabels' => $labels,
+			'abandonmentData' => $abandonment_data,
+			'frictionLabels' => $friction_labels,
+			'frictionData' => $friction_data,
+			'checkoutTimeData' => $checkout_time_data,
+			'nonce' => wp_create_nonce( 'cfa-nonce' ),
+		);
 	}
 
 	/**

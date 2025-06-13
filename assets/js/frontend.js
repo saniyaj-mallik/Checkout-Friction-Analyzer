@@ -1,4 +1,4 @@
-(function($) {
+(function ($) {
     'use strict';
 
     // Generate or retrieve session ID
@@ -18,7 +18,7 @@
 
     // Track page load time
     const pageLoadStart = performance.now();
-    $(window).on('load', function() {
+    $(window).on('load', function () {
         const pageLoadTime = performance.now() - pageLoadStart;
         trackFrictionPoint('page_load', {
             load_time: pageLoadTime
@@ -26,7 +26,7 @@
     });
 
     // Track form field interactions
-    $('form.checkout input, form.checkout select, form.checkout textarea').on('change', function() {
+    $('form.checkout input, form.checkout select, form.checkout textarea').on('change', function () {
         trackFriction('field_change', {
             field_id: $(this).attr('id'),
             field_name: $(this).attr('name'),
@@ -36,16 +36,19 @@
     });
 
     // Track form validation errors
-    $(document.body).on('checkout_error', function() {
+    $(document.body).on('checkout_error', function () {
+        var errors = $('.woocommerce-error li').map(function () {
+            return $(this).text();
+        }).get();
+        // Store latest errors in sessionStorage
+        sessionStorage.setItem('cfa_last_checkout_errors', JSON.stringify(errors));
         trackFriction('validation_error', {
-            errors: $('.woocommerce-error li').map(function() {
-                return $(this).text();
-            }).get()
+            errors: errors
         });
     });
 
     // Track cart updates
-    $(document.body).on('added_to_cart removed_from_cart', function(event, fragments, cart_hash, $button) {
+    $(document.body).on('added_to_cart removed_from_cart', function (event, fragments, cart_hash, $button) {
         trackFriction(event.type, {
             product_id: $button.data('product_id'),
             quantity: $button.data('quantity')
@@ -53,21 +56,21 @@
     });
 
     // Track checkout steps
-    $('form.checkout').on('checkout_place_order', function() {
+    $('form.checkout').on('checkout_place_order', function () {
         trackFriction('checkout_submit', {
             timestamp: new Date().toISOString()
         });
     });
 
     // Track payment method changes
-    $('form.checkout').on('payment_method_selected', function() {
+    $('form.checkout').on('payment_method_selected', function () {
         trackFriction('payment_method_change', {
             method: $('input[name="payment_method"]:checked').val()
         });
     });
 
     // Track shipping method changes
-    $(document.body).on('updated_checkout', function() {
+    $(document.body).on('updated_checkout', function () {
         trackFriction('shipping_method_change', {
             method: $('input[name="shipping_method[0]"]:checked').val()
         });
@@ -75,17 +78,39 @@
 
     // Track form abandonment
     let formStartTime = new Date();
-    $(window).on('beforeunload', function() {
+    $(window).on('beforeunload', function () {
         if ($('form.checkout').length) {
+            // Collect required fields that are empty
+            var abandonedFields = [];
+            $('form.checkout input[required], form.checkout select[required], form.checkout textarea[required]').each(function () {
+                var $field = $(this);
+                // Consider field abandoned if empty or only whitespace
+                if (!$field.val() || !$field.val().trim()) {
+                    abandonedFields.push({
+                        id: $field.attr('id'),
+                        name: $field.attr('name'),
+                        type: $field.attr('type')
+                    });
+                }
+            });
+            // Get last validation errors from sessionStorage
+            var lastErrors = [];
+            try {
+                lastErrors = JSON.parse(sessionStorage.getItem('cfa_last_checkout_errors')) || [];
+            } catch (e) {
+                lastErrors = [];
+            }
             trackFriction('form_abandonment', {
                 time_spent: (new Date() - formStartTime) / 1000,
-                fields_filled: $('form.checkout input[value!=""]').length
+                fields_filled: $('form.checkout input[value!=""]').length,
+                abandoned_fields: abandonedFields,
+                last_errors: lastErrors
             });
         }
     });
 
     // Track field focus/blur
-    $('form.checkout input, form.checkout select, form.checkout textarea').on('focus blur', function(e) {
+    $('form.checkout input, form.checkout select, form.checkout textarea').on('focus blur', function (e) {
         trackFriction('field_' + e.type, {
             field_id: $(this).attr('id'),
             field_name: $(this).attr('name')
@@ -94,7 +119,7 @@
 
     // Track scrolling
     let lastScrollTop = 0;
-    $(window).on('scroll', function() {
+    $(window).on('scroll', function () {
         let currentScroll = $(this).scrollTop();
         if (Math.abs(currentScroll - lastScrollTop) > 100) {
             trackFriction('scroll', {
@@ -107,7 +132,7 @@
 
     // Track time spent
     let startTime = new Date();
-    setInterval(function() {
+    setInterval(function () {
         trackFriction('time_spent', {
             seconds: Math.floor((new Date() - startTime) / 1000)
         });

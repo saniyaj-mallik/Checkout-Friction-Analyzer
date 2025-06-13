@@ -10,7 +10,11 @@
 
     // Abandonment rate chart
     function initializeAbandonmentChart() {
-        const ctx = document.getElementById('abandonmentChart').getContext('2d');
+        var chartElem = document.getElementById('abandonmentChart');
+        if (!chartElem) {
+            return;
+        }
+        var ctx = chartElem.getContext('2d');
         new Chart(ctx, {
             type: 'line',
             data: {
@@ -41,7 +45,11 @@
 
     // Friction points chart
     function initializeFrictionPointsChart() {
-        const ctx = document.getElementById('frictionPointsChart').getContext('2d');
+        var chartElem = document.getElementById('frictionPointsChart');
+        if (!chartElem) {
+            return;
+        }
+        var ctx = chartElem.getContext('2d');
         new Chart(ctx, {
             type: 'bar',
             data: {
@@ -65,7 +73,11 @@
 
     // Checkout time chart
     function initializeCheckoutTimeChart() {
-        const ctx = document.getElementById('checkoutTimeChart').getContext('2d');
+        var chartElem = document.getElementById('checkoutTimeChart');
+        if (!chartElem) {
+            return;
+        }
+        var ctx = chartElem.getContext('2d');
         new Chart(ctx, {
             type: 'line',
             data: {
