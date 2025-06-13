@@ -16,64 +16,76 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  */
 
-// Exit if accessed directly
-if (!defined('ABSPATH')) {
-    exit;
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
-// Define plugin constants
-define('CFA_VERSION', '1.0.0');
-define('CFA_PLUGIN_DIR', plugin_dir_path(__FILE__));
-define('CFA_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('CFA_PLUGIN_BASENAME', plugin_basename(__FILE__));
+// Define plugin constants.
+define( 'CFA_VERSION', '1.0.0' );
+define( 'CFA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'CFA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+define( 'CFA_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
-// Autoloader
-spl_autoload_register(function ($class) {
-    $prefix = 'CheckoutFrictionAnalyzer\\';
-    $base_dir = CFA_PLUGIN_DIR . 'includes/';
+// Autoloader.
+spl_autoload_register( function ( $class ) {
+	$prefix = 'CheckoutFrictionAnalyzer\\';
+	$base_dir = CFA_PLUGIN_DIR . 'includes/';
 
-    $len = strlen($prefix);
-    if (strncmp($prefix, $class, $len) !== 0) {
-        return;
-    }
+	$len = strlen( $prefix );
+	if ( strncmp( $prefix, $class, $len ) !== 0 ) {
+		return;
+	}
 
-    $relative_class = substr($class, $len);
-    $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
+	$relative_class = substr( $class, $len );
+	$file = $base_dir . str_replace( '\\', '/', $relative_class ) . '.php';
 
-    if (file_exists($file)) {
-        require $file;
-    }
-});
+	if ( file_exists( $file ) ) {
+		require $file;
+	}
+} );
 
-// Initialize the plugin
+// Initialize the plugin.
 function cfa_init() {
-    // Check if WooCommerce is active
-    if (!class_exists('WooCommerce')) {
-        add_action('admin_notices', function() {
-            ?>
-            <div class="error">
-                <p><?php _e('Checkout Friction Analyzer requires WooCommerce to be installed and active.', 'checkout-friction-analyzer'); ?></p>
-            </div>
-            <?php
-        });
-        return;
-    }
+	// Check if WooCommerce is active.
+	if ( ! class_exists( 'WooCommerce' ) ) {
+		add_action(
+			'admin_notices',
+			function () {
+				?>
+                <div class="error">
+                    <p><?php _e( 'Checkout Friction Analyzer requires WooCommerce to be installed and active.', 'checkout-friction-analyzer' ); ?></p>
+                </div>
+                <?php
+			}
+		);
+		return;
+	}
 
-    // Initialize plugin components
-    require_once CFA_PLUGIN_DIR . 'includes/class-cfa-core.php';
-    new CheckoutFrictionAnalyzer\Core();
+	// Initialize plugin components.
+	require_once CFA_PLUGIN_DIR . 'includes/class-cfa-core.php';
+	new CheckoutFrictionAnalyzer\Core();
 }
-add_action('plugins_loaded', 'cfa_init');
+add_action(
+	'plugins_loaded',
+	'cfa_init'
+);
 
-// Activation hook
-register_activation_hook(__FILE__, function() {
-    // Create necessary database tables
-    require_once CFA_PLUGIN_DIR . 'includes/class-cfa-activator.php';
-    CheckoutFrictionAnalyzer\Activator::activate();
-});
+// Activation hook.
+register_activation_hook(
+	__FILE__,
+	function () {
+		// Create necessary database tables.
+		require_once CFA_PLUGIN_DIR . 'includes/class-cfa-activator.php';
+		CheckoutFrictionAnalyzer\Activator::activate();
+	}
+);
 
-// Deactivation hook
-register_deactivation_hook(__FILE__, function() {
-    require_once CFA_PLUGIN_DIR . 'includes/class-cfa-deactivator.php';
-    CheckoutFrictionAnalyzer\Deactivator::deactivate();
-}); 
+// Deactivation hook.
+register_deactivation_hook(
+	__FILE__,
+	function () {
+		require_once CFA_PLUGIN_DIR . 'includes/class-cfa-deactivator.php';
+		CheckoutFrictionAnalyzer\Deactivator::deactivate();
+	}
+);

@@ -38,7 +38,7 @@ class Activator {
 			KEY created_at (created_at)
 		) $charset_collate;";
 
-		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
 	}
 
@@ -59,4 +59,4 @@ class Activator {
 			)
 		);
 	}
-} 
+}

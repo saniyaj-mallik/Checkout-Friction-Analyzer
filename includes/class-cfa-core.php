@@ -14,32 +14,32 @@ class Core {
 	/**
 	 * Initialize the plugin
 	 */
-	public function __construct() {
+	public function __construct () {
 		$this->init_hooks();
 	}
 
 	/**
 	 * Initialize WordPress hooks
 	 */
-	private function init_hooks() {
-		// Admin hooks
+	private function init_hooks () {
+		// Admin hooks.
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 
-		// Frontend hooks
+		// Frontend hooks.
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
 		
-		// Cart tracking
+		// Cart tracking.
 		add_action( 'woocommerce_add_to_cart', array( $this, 'track_add_to_cart' ), 10, 6 );
 		add_action( 'woocommerce_remove_cart_item', array( $this, 'track_remove_from_cart' ), 10, 2 );
 		
-		// Checkout tracking
+		// Checkout tracking.
 		add_action( 'woocommerce_before_checkout_process', array( $this, 'track_checkout_start' ) );
 		add_action( 'woocommerce_checkout_process', array( $this, 'track_checkout_process' ) );
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'track_order_processed' ), 10, 3 );
 		add_action( 'woocommerce_checkout_order_created', array( $this, 'track_order_created' ), 10, 1 );
 		
-		// AJAX handlers
+		// AJAX handlers.
 		add_action( 'wp_ajax_cfa_track_friction', array( $this, 'handle_track_friction' ) );
 		add_action( 'wp_ajax_nopriv_cfa_track_friction', array( $this, 'handle_track_friction' ) );
 	}
@@ -47,7 +47,7 @@ class Core {
 	/**
 	 * Add admin menu items
 	 */
-	public function add_admin_menu() {
+	public function add_admin_menu () {
 		add_submenu_page(
 			'woocommerce',
 			__( 'Checkout Friction Analyzer', 'checkout-friction-analyzer' ),
@@ -63,7 +63,7 @@ class Core {
 	 *
 	 * @param string $hook Current admin page.
 	 */
-	public function enqueue_admin_assets( $hook ) {
+	public function enqueue_admin_assets ( $hook ) {
 		if ( 'woocommerce_page_checkout-friction-analyzer' !== $hook ) {
 			return;
 		}
@@ -83,7 +83,7 @@ class Core {
 			true
 		);
 
-		// Add Chart.js
+		// Add Chart.js.
 		wp_enqueue_script(
 			'chartjs',
 			'https://cdn.jsdelivr.net/npm/chart.js',
@@ -92,7 +92,7 @@ class Core {
 			true
 		);
 
-		// Localize cfaData for admin.js
+		// Localize cfaData for admin.js.
 		$chart_data = $this->get_admin_chart_data();
 		wp_localize_script(
 			'cfa-admin',
@@ -106,19 +106,19 @@ class Core {
 	 *
 	 * @return array
 	 */
-	private function get_admin_chart_data() {
-		// Placeholder: last 7 days labels
+	private function get_admin_chart_data () {
+		// Placeholder: last 7 days labels.
 		$labels = array();
 		for ( $i = 6; $i >= 0; $i-- ) {
 			$labels[] = date( 'M j', strtotime( "-$i days" ) );
 		}
 
-		// Placeholder abandonment rate data (simulate some drop-off)
+		// Placeholder abandonment rate data (simulate some drop-off).
 		$abandonment_data = array( 20, 25, 30, 28, 22, 18, 15 );
-		// Placeholder friction points
+		// Placeholder friction points.
 		$friction_labels = array( 'Email Error', 'Invalid ZIP', 'Missing Phone', 'Coupon Error' );
 		$friction_data = array( 12, 8, 5, 3 );
-		// Placeholder checkout time data (in seconds)
+		// Placeholder checkout time data (in seconds).
 		$checkout_time_data = array( 120, 110, 130, 125, 140, 115, 100 );
 
 		return array(
@@ -134,7 +134,7 @@ class Core {
 	/**
 	 * Enqueue frontend assets
 	 */
-	public function enqueue_frontend_assets() {
+	public function enqueue_frontend_assets () {
 		if ( ! is_checkout() ) {
 			return;
 		}
@@ -167,7 +167,7 @@ class Core {
 	 * @param array  $variation     Variation data.
 	 * @param array  $cart_item_data Cart item data.
 	 */
-	public function track_add_to_cart( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) {
+	public function track_add_to_cart ( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) {
 		$this->log_friction_point(
 			'add_to_cart',
 			array(
@@ -185,7 +185,7 @@ class Core {
 	 * @param string $cart_item_key Cart item key.
 	 * @param object $cart          Cart object.
 	 */
-	public function track_remove_from_cart( $cart_item_key, $cart ) {
+	public function track_remove_from_cart ( $cart_item_key, $cart ) {
 		$this->log_friction_point(
 			'remove_from_cart',
 			array(
@@ -197,7 +197,7 @@ class Core {
 	/**
 	 * Track checkout start
 	 */
-	public function track_checkout_start() {
+	public function track_checkout_start () {
 		$this->log_friction_point(
 			'checkout_start',
 			array(
@@ -211,7 +211,7 @@ class Core {
 	 *
 	 * @param WC_Order $order Order object.
 	 */
-	public function track_order_created( $order ) {
+	public function track_order_created ( $order ) {
 		$this->log_friction_point(
 			'order_created',
 			array(
@@ -225,7 +225,7 @@ class Core {
 	/**
 	 * Track checkout process
 	 */
-	public function track_checkout_process() {
+	public function track_checkout_process () {
 		// Track form validation errors
 		$errors = WC()->session->get( 'wc_notices', array() );
 		if ( ! empty( $errors['error'] ) ) {
@@ -243,7 +243,7 @@ class Core {
 	 *
 	 * @param int $order_id Order ID.
 	 */
-	public function track_order_processed( $order_id ) {
+	public function track_order_processed ( $order_id ) {
 		// Track successful order completion
 		$this->log_friction_point(
 			'order_completed',
@@ -259,7 +259,7 @@ class Core {
 	 * @param string $type Friction point type.
 	 * @param array  $data Friction point data.
 	 */
-	private function log_friction_point( $type, $data ) {
+	private function log_friction_point ( $type, $data ) {
 		global $wpdb;
 
 		$wpdb->insert(
@@ -277,7 +277,7 @@ class Core {
 	/**
 	 * Render admin page
 	 */
-	public function render_admin_page() {
+	public function render_admin_page () {
 		require_once CFA_PLUGIN_DIR . 'admin/views/admin-page.php';
 	}
 
@@ -286,7 +286,7 @@ class Core {
 	 *
 	 * @return float Abandonment rate as a percentage
 	 */
-	public function get_abandonment_rate() {
+	public function get_abandonment_rate () {
 		global $wpdb;
 
 		$total_sessions = $wpdb->get_var(
@@ -313,7 +313,7 @@ class Core {
 	 *
 	 * @return float Average checkout time in seconds
 	 */
-	public function get_avg_checkout_time() {
+	public function get_avg_checkout_time () {
 		global $wpdb;
 
 		$avg_time = $wpdb->get_var(
@@ -336,7 +336,7 @@ class Core {
 	 *
 	 * @return array Array of friction points with their counts
 	 */
-	public function get_top_friction_points() {
+	public function get_top_friction_points () {
 		global $wpdb;
 
 		return $wpdb->get_results(
@@ -355,7 +355,7 @@ class Core {
 	/**
 	 * Handle AJAX track friction request
 	 */
-	public function handle_track_friction() {
+	public function handle_track_friction () {
 		check_ajax_referer( 'cfa-nonce', 'nonce' );
 
 		$type = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '';
@@ -367,4 +367,4 @@ class Core {
 
 		wp_send_json_success();
 	}
-} 
+}

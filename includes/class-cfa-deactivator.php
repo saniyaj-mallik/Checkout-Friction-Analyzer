@@ -38,4 +38,4 @@ class Deactivator {
 		delete_option( 'cfa_settings' );
 		delete_option( 'cfa_clear_data_on_deactivate' );
 	}
-} 
+}
