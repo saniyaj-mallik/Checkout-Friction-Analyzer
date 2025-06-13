@@ -243,21 +243,56 @@ function cfa_get_badge_class( $count ) {
 				<p><?php esc_html_e( 'No validation errors recorded.', 'checkout-friction-analyzer' ); ?></p>
 			<?php endif; ?>
 		</div>
-
 		<!-- Top Abandoned Fields -->
 		<div class="cfa-card">
 			<h2><?php esc_html_e( 'Top Abandoned Fields', 'checkout-friction-analyzer' ); ?></h2>
-			<?php if ( ! empty( $field_counts ) ) : ?>
+			<?php
+			// Fetch and format abandoned fields data
+			$abandoned_fields_query = $wpdb->prepare(
+				"SELECT 
+					JSON_EXTRACT(data, '$.abandoned_fields') as fields,
+					COUNT(*) as count
+				FROM {$table_name}
+				WHERE type = %s
+				AND JSON_LENGTH(JSON_EXTRACT(data, '$.abandoned_fields')) > 0
+				GROUP BY JSON_EXTRACT(data, '$.abandoned_fields')
+				ORDER BY count DESC
+				LIMIT 5",
+				'form_abandonment'
+			);
+			
+			$abandoned_fields_data = $wpdb->get_results($abandoned_fields_query);
+			?>
+			
+			<?php if (!empty($abandoned_fields_data)) : ?>
 				<ul class="cfa-error-list">
-					<?php foreach ( $field_counts as $field => $count ) : ?>
-						<li>
-							<span class="<?php echo esc_attr( cfa_get_badge_class( $count ) ); ?>"><?php echo esc_html( $count ); ?></span>
-							<span class="cfa-error-message"><?php echo esc_html( $field ); ?></span>
-						</li>
-					<?php endforeach; ?>
+					<?php foreach ($abandoned_fields_data as $field_data) : 
+						$fields = json_decode($field_data->fields, true);
+						if (is_array($fields)) {
+							foreach ($fields as $field) :
+								$field_name = isset($field['name']) ? $field['name'] : (isset($field['id']) ? $field['id'] : '');
+								if (!empty($field_name)) :
+									?>
+									<li>
+										<span class="<?php echo esc_attr(cfa_get_badge_class($field_data->count)); ?>">
+											<?php echo esc_html($field_data->count); ?>
+										</span>
+										<span class="cfa-error-message">
+											<?php 
+											// Convert field name to readable format
+											$readable_name = ucwords(str_replace(array('_', '-'), ' ', $field_name));
+											echo esc_html($readable_name);
+											?>
+										</span>
+									</li>
+									<?php
+								endif;
+							endforeach;
+						}
+					endforeach; ?>
 				</ul>
 			<?php else : ?>
-				<p><?php esc_html_e( 'No abandoned fields recorded.', 'checkout-friction-analyzer' ); ?></p>
+				<p><?php esc_html_e('No abandoned fields recorded.', 'checkout-friction-analyzer'); ?></p>
 			<?php endif; ?>
 		</div>
 
@@ -302,4 +337,36 @@ function cfa_get_badge_class( $count ) {
 			</div>
 		</div>
 	</div>
-</div> 
+</div>
+
+<?php
+// Temporary debugging code - Remove after testing
+if (current_user_can('manage_options')) {
+    echo '<div style="background: #f1f1f1; padding: 15px; margin: 15px 0; border-left: 4px solid #0073aa;">';
+    echo '<h3>Debug Information</h3>';
+    
+    // Show raw abandoned fields data
+    $debug_query = $wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}cfa_friction_points 
+         WHERE type = %s 
+         ORDER BY created_at DESC 
+         LIMIT 5",
+        'form_abandonment'
+    );
+    $debug_results = $wpdb->get_results($debug_query);
+    
+    if ($debug_results) {
+        echo '<h4>Last 5 Abandoned Form Records:</h4>';
+        echo '<pre>';
+        foreach ($debug_results as $record) {
+            echo "Session ID: " . esc_html($record->session_id) . "\n";
+            echo "Created At: " . esc_html($record->created_at) . "\n";
+            echo "Data: " . esc_html($record->data) . "\n\n";
+        }
+        echo '</pre>';
+    } else {
+        echo '<p>No abandonment records found.</p>';
+    }
+    
+    echo '</div>';
+}

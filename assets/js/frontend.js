@@ -103,9 +103,7 @@
         trackFriction('shipping_method_change', {
             method: $('input[name="shipping_method[0]"]:checked').val()
         });
-    });
-
-    // Track form abandonment
+    });    // Track form abandonment
     let formStartTime = new Date();
     $(window).on('beforeunload', function () {
         if ($('form.checkout').length) {
@@ -113,15 +111,44 @@
             var abandonedFields = [];
             $('form.checkout input[required], form.checkout select[required], form.checkout textarea[required]').each(function () {
                 var $field = $(this);
-                // Consider field abandoned if empty or only whitespace
-                if (!$field.val() || !$field.val().trim()) {
+                var fieldValue = $field.val();
+                var fieldName = $field.attr('name');
+                
+                // Skip if field doesn't have a name
+                if (!fieldName) return;
+                
+                // Consider field abandoned if:
+                // 1. Empty or only whitespace
+                // 2. Invalid format (for specific field types)
+                var isAbandoned = false;
+                
+                if (!fieldValue || !fieldValue.trim()) {
+                    isAbandoned = true;
+                } else {
+                    // Additional validation for specific fields
+                    switch(fieldName) {
+                        case 'billing_email':
+                            isAbandoned = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue);
+                            break;
+                        case 'billing_phone':
+                            isAbandoned = !/^\d{10,}$/.test(fieldValue.replace(/[^0-9]/g, ''));
+                            break;
+                        case 'billing_postcode':
+                            isAbandoned = !/^[A-Z0-9]{3,}$/.test(fieldValue.toUpperCase());
+                            break;
+                    }
+                }
+                
+                if (isAbandoned) {
                     abandonedFields.push({
                         id: $field.attr('id'),
-                        name: $field.attr('name'),
-                        type: $field.attr('type')
+                        name: fieldName,
+                        type: $field.attr('type'),
+                        value: fieldValue // Include the invalid value for analysis
                     });
                 }
             });
+            
             // Get last validation errors from sessionStorage
             var lastErrors = [];
             try {
@@ -129,11 +156,29 @@
             } catch (e) {
                 lastErrors = [];
             }
+            
+            // Convert validation errors into abandoned fields if not already included
+            lastErrors.forEach(function(error) {
+                var fieldName = '';
+                if (error.includes('PIN Code')) fieldName = 'billing_postcode';
+                else if (error.includes('Street address')) fieldName = 'billing_address_1';
+                else if (error.includes('email')) fieldName = 'billing_email';
+                else if (error.includes('phone')) fieldName = 'billing_phone';
+                
+                if (fieldName && !abandonedFields.some(f => f.name === fieldName)) {
+                    abandonedFields.push({
+                        name: fieldName,
+                        type: 'text',
+                        error: error.trim()
+                    });
+                }
+            });
+            
             trackFriction('form_abandonment', {
                 time_spent: (new Date() - formStartTime) / 1000,
                 fields_filled: $('form.checkout input[value!=""]').length,
                 abandoned_fields: abandonedFields,
-                last_errors: lastErrors
+                last_errors: lastErrors.map(error => error.trim())
             });
         }
     });

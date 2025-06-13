@@ -109,32 +109,94 @@ class Core {
 	}
 
 	/**
-	 * Get chart data for admin dashboard
+	 * Get admin chart data
 	 *
 	 * @return array
 	 */
-	private function get_admin_chart_data () {
-		// Placeholder: last 7 days labels.
+	private function get_admin_chart_data() {
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'cfa_friction_points';
+
+		// Get date labels for last 7 days
 		$labels = array();
-		for ( $i = 6; $i >= 0; $i-- ) {
-			$labels[] = date( 'M j', strtotime( "-$i days" ) );
+		for ($i = 6; $i >= 0; $i--) {
+			$labels[] = date('M j', strtotime("-$i days"));
 		}
 
-		// Placeholder abandonment rate data (simulate some drop-off).
-		$abandonment_data = array( 20, 25, 30, 28, 22, 18, 15 );
-		// Placeholder friction points.
-		$friction_labels = array( 'Email Error', 'Invalid ZIP', 'Missing Phone', 'Coupon Error' );
-		$friction_data = array( 12, 8, 5, 3 );
-		// Placeholder checkout time data (in seconds).
-		$checkout_time_data = array( 120, 110, 130, 125, 140, 115, 100 );
+		// Get abandonment data for last 7 days
+		$abandonment_data = array();
+		for ($i = 6; $i >= 0; $i--) {
+			$date = date('Y-m-d', strtotime("-$i days"));
+			$total_sessions = $wpdb->get_var($wpdb->prepare(
+				"SELECT COUNT(DISTINCT session_id) 
+				FROM $table_name 
+				WHERE DATE(created_at) = %s 
+				AND type IN ('checkout_start', 'order_completed')",
+				$date
+			));
+
+			$completed_orders = $wpdb->get_var($wpdb->prepare(
+				"SELECT COUNT(DISTINCT session_id) 
+				FROM $table_name 
+				WHERE DATE(created_at) = %s 
+				AND type = 'order_completed'",
+				$date
+			));
+
+			$abandonment_rate = $total_sessions > 0 ? 
+				round(((($total_sessions - $completed_orders) / $total_sessions) * 100), 1) : 
+				0;
+
+			$abandonment_data[] = $abandonment_rate;
+		}
+
+		// Get top friction points
+		$friction_data = $wpdb->get_results(
+			"SELECT 
+				type as label,
+				COUNT(*) as count
+			FROM $table_name
+			WHERE type IN ('validation_error', 'field_error', 'form_abandonment')
+			GROUP BY type
+			ORDER BY count DESC
+			LIMIT 4"
+		);
+
+		$friction_labels = array_column($friction_data, 'label');
+		$friction_counts = array_column($friction_data, 'count');
+
+		// Get average checkout time per day for last 7 days
+		$checkout_time_data = array();
+		for ($i = 6; $i >= 0; $i--) {
+			$date = date('Y-m-d', strtotime("-$i days"));
+			$avg_time = $wpdb->get_var($wpdb->prepare(
+				"SELECT AVG(TIMESTAMPDIFF(SECOND, MIN(t1.created_at), MAX(t2.created_at)))
+				FROM (
+					SELECT session_id, created_at
+					FROM $table_name
+					WHERE DATE(created_at) = %s
+					AND type = 'checkout_start'
+				) t1
+				JOIN (
+					SELECT session_id, created_at
+					FROM $table_name
+					WHERE DATE(created_at) = %s
+					AND type = 'order_completed'
+				) t2 ON t1.session_id = t2.session_id",
+				$date,
+				$date
+			));
+
+			$checkout_time_data[] = $avg_time ? round($avg_time, 0) : 0;
+		}
 
 		return array(
 			'chartLabels' => $labels,
 			'abandonmentData' => $abandonment_data,
 			'frictionLabels' => $friction_labels,
-			'frictionData' => $friction_data,
+			'frictionData' => $friction_counts,
 			'checkoutTimeData' => $checkout_time_data,
-			'nonce' => wp_create_nonce( 'cfa-nonce' ),
+			'nonce' => wp_create_nonce('cfa-nonce'),
 		);
 	}
 
