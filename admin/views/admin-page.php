@@ -46,14 +46,30 @@ $form_abandonment = $wpdb->get_row(
 // Get validation errors.
 $validation_errors = $wpdb->get_results(
 	"SELECT 
-		JSON_EXTRACT(data, '$.errors') as errors,
+		data,
 		COUNT(*) as count
 	FROM {$table_name}
 	WHERE type = 'validation_error'
-	GROUP BY JSON_EXTRACT(data, '$.errors')
+	GROUP BY data
 	ORDER BY count DESC
 	LIMIT 5"
 );
+
+// Format validation errors
+$formatted_validation_errors = array();
+foreach ($validation_errors as $error) {
+    $error_data = json_decode($error->data, true);
+    if (isset($error_data['errors']) && is_array($error_data['errors'])) {
+        $formatted_errors = array_map(function($err) {
+            // Clean up the error message
+            return trim(str_replace(array("\n", "\t"), '', $err));
+        }, $error_data['errors']);
+        $formatted_validation_errors[] = (object) array(
+            'errors' => $formatted_errors,
+            'count' => $error->count
+        );
+    }
+}
 
 // Get top abandoned fields.
 $abandoned_fields = $wpdb->get_results(
@@ -201,16 +217,25 @@ function cfa_get_badge_class( $count ) {
 				</div>
 			</div>
 		</div>
-
 		<!-- Top Validation Errors -->
 		<div class="cfa-card">
 			<h2><?php esc_html_e( 'Top Validation Errors', 'checkout-friction-analyzer' ); ?></h2>
-			<?php if ( ! empty( $validation_errors ) ) : ?>
+			<?php if ( ! empty( $formatted_validation_errors ) ) : ?>
 				<ul class="cfa-error-list">
-					<?php foreach ( $validation_errors as $error ) : ?>
+					<?php foreach ( $formatted_validation_errors as $error ) : ?>
 						<li>
 							<span class="<?php echo esc_attr( cfa_get_badge_class( $error->count ) ); ?>"><?php echo esc_html( $error->count ); ?></span>
-							<span class="cfa-error-message"><?php echo esc_html( $error->errors ); ?></span>
+							<span class="cfa-error-message">
+								<?php 
+								if (is_array($error->errors)) {
+									foreach ($error->errors as $err_msg) {
+										echo '<div>' . esc_html($err_msg) . '</div>';
+									}
+								} else {
+									echo esc_html($error->errors);
+								}
+								?>
+							</span>
 						</li>
 					<?php endforeach; ?>
 				</ul>
