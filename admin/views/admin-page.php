@@ -339,34 +339,3 @@ function cfa_get_badge_class( $count ) {
 	</div>
 </div>
 
-<?php
-// Temporary debugging code - Remove after testing
-if (current_user_can('manage_options')) {
-    echo '<div style="background: #f1f1f1; padding: 15px; margin: 15px 0; border-left: 4px solid #0073aa;">';
-    echo '<h3>Debug Information</h3>';
-    
-    // Show raw abandoned fields data
-    $debug_query = $wpdb->prepare(
-        "SELECT * FROM {$wpdb->prefix}cfa_friction_points 
-         WHERE type = %s 
-         ORDER BY created_at DESC 
-         LIMIT 5",
-        'form_abandonment'
-    );
-    $debug_results = $wpdb->get_results($debug_query);
-    
-    if ($debug_results) {
-        echo '<h4>Last 5 Abandoned Form Records:</h4>';
-        echo '<pre>';
-        foreach ($debug_results as $record) {
-            echo "Session ID: " . esc_html($record->session_id) . "\n";
-            echo "Created At: " . esc_html($record->created_at) . "\n";
-            echo "Data: " . esc_html($record->data) . "\n\n";
-        }
-        echo '</pre>';
-    } else {
-        echo '<p>No abandonment records found.</p>';
-    }
-    
-    echo '</div>';
-}
