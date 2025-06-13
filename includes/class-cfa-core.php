@@ -7,6 +7,13 @@
 
 namespace CheckoutFrictionAnalyzer;
 
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+use \Exception;
+
 /**
  * Core plugin class
  */
@@ -258,20 +265,35 @@ class Core {
 	 *
 	 * @param string $type Friction point type.
 	 * @param array  $data Friction point data.
-	 */
-	private function log_friction_point ( $type, $data ) {
+	 */	private function log_friction_point ( $type, $data ) {
 		global $wpdb;
 
-		$wpdb->insert(
-			$wpdb->prefix . 'cfa_friction_points',
-			array(
-				'session_id' => isset( $data['session_id'] ) ? $data['session_id'] : '',
-				'type'       => $type,
-				'data'       => json_encode( $data ),
-				'created_at' => current_time( 'mysql' ),
-			),
-			array( '%s', '%s', '%s', '%s' )
-		);
+		try {
+			error_log('CFA: Attempting to log friction point - Type: ' . $type);
+			
+			$result = $wpdb->insert(
+				$wpdb->prefix . 'cfa_friction_points',
+				array(
+					'session_id' => isset( $data['session_id'] ) ? $data['session_id'] : '',
+					'type'       => $type,
+					'data'       => json_encode( $data ),
+					'created_at' => current_time( 'mysql' ),
+				),
+				array( '%s', '%s', '%s', '%s' )
+			);
+
+			if ($result === false) {
+				error_log('CFA: Database error: ' . $wpdb->last_error);
+				return false;
+			}
+
+			error_log('CFA: Successfully logged friction point with ID: ' . $wpdb->insert_id);
+			return true;
+
+		} catch (Exception $e) {
+			error_log('CFA: Error logging friction point: ' . $e->getMessage());
+			return false;
+		}
 	}
 
 	/**
@@ -354,17 +376,57 @@ class Core {
 
 	/**
 	 * Handle AJAX track friction request
-	 */
-	public function handle_track_friction () {
-		check_ajax_referer( 'cfa-nonce', 'nonce' );
+	 */	public function handle_track_friction () {
+		try {
+			// Enable error reporting for debugging
+			error_log('CFA: Received AJAX request: ' . print_r($_POST, true));
 
-		$type = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '';
-		$data = isset( $_POST['data'] ) ? json_decode( stripslashes( $_POST['data'] ), true ) : array();
+			// Verify nonce
+			check_ajax_referer( 'cfa-nonce', 'nonce' );
 
-		if ( ! empty( $type ) ) {
-			$this->log_friction_point( $type, $data );
+			// Get and sanitize data
+			$type = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '';
+			$session_id = isset( $_POST['session_id'] ) ? sanitize_text_field( wp_unslash( $_POST['session_id'] ) ) : '';
+			$raw_data = isset( $_POST['data'] ) ? $_POST['data'] : '';
+
+			// Handle both string and array data
+			if (is_string($raw_data)) {
+				$data = json_decode(stripslashes($raw_data), true);
+			} else {
+				$data = $raw_data;
+			}
+
+			// Add session_id to data if not present
+			if (!isset($data['session_id']) && $session_id) {
+				$data['session_id'] = $session_id;
+			}
+
+			error_log('CFA: Processed data - Type: ' . $type . ', Data: ' . print_r($data, true));
+
+			if ( ! empty( $type ) ) {
+				$result = $this->log_friction_point( $type, $data );
+				if ($result === false) {
+					error_log('CFA: Database insert failed');
+					wp_send_json_error(array('message' => 'Failed to save friction point'));
+					return;
+				}
+			} else {
+				error_log('CFA: Empty friction point type');
+				wp_send_json_error(array('message' => 'Empty friction point type'));
+				return;
+			}
+
+			wp_send_json_success(array(
+				'message' => 'Friction point logged successfully',
+				'type' => $type
+			));
+
+		} catch (Exception $e) {
+			error_log('CFA Error: ' . $e->getMessage());
+			wp_send_json_error(array(
+				'message' => 'Internal server error',
+				'error' => $e->getMessage()
+			));
 		}
-
-		wp_send_json_success();
 	}
 }

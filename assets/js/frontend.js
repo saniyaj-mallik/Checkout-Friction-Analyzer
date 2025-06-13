@@ -1,7 +1,38 @@
 (function ($) {
     'use strict';
 
-    // Generate or retrieve session ID
+    // Helper functions
+    function trackFriction(type, data) {
+        // Add debug logging
+        console.log('Sending friction data:', {
+            type: type,
+            data: data,
+            session_id: getSessionId()
+        });
+
+        return $.ajax({
+            url: cfaData.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'cfa_track_friction',
+                nonce: cfaData.nonce,
+                session_id: getSessionId(),
+                type: type,
+                data: JSON.stringify(data)
+            },
+            success: function(response) {
+                console.log('Friction tracking success:', response);
+            },
+            error: function(xhr, status, error) {
+                console.error('Friction tracking error:', {
+                    status: status,
+                    error: error,
+                    response: xhr.responseText
+                });
+            }
+        });
+    }
+
     function getSessionId() {
         let sessionId = sessionStorage.getItem('cfa_session_id');
         if (!sessionId) {
@@ -9,18 +40,16 @@
             sessionStorage.setItem('cfa_session_id', sessionId);
         }
         return sessionId;
-    }
+    }    // Initialize tracking when document is ready
+    $(document).ready(function() {
+        // Track session start
+        trackFriction('session_start', {
+            timestamp: new Date().toISOString()
+        });
 
-    // Track session start
-    trackFrictionPoint('session_start', {
-        timestamp: new Date().toISOString()
-    });
-
-    // Track page load time
-    const pageLoadStart = performance.now();
-    $(window).on('load', function () {
-        const pageLoadTime = performance.now() - pageLoadStart;
-        trackFrictionPoint('page_load', {
+        // Track page load time
+        const pageLoadTime = performance.now();
+        trackFriction('page_load', {
             load_time: pageLoadTime
         });
     });
@@ -143,24 +172,7 @@
         user_agent: navigator.userAgent,
         screen_width: window.innerWidth,
         screen_height: window.innerHeight
-    });
-
-    // Helper functions
-    function trackFrictionPoint(type, data) {
-        $.ajax({
-            url: cfaData.ajaxUrl,
-            type: 'POST',
-            data: {
-                action: 'cfa_track_friction',
-                nonce: cfaData.nonce,
-                session_id: getSessionId(),
-                type: type,
-                data: data
-            }
-        });
-    }
-
-    function getCurrentCheckoutStep() {
+    });    function getCurrentCheckoutStep() {
         if ($('#payment').is(':visible')) {
             return 'payment';
         } else if ($('#customer_details').is(':visible')) {
