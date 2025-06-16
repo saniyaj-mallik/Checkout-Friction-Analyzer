@@ -189,37 +189,6 @@ class Core {
 		$friction_labels = array_column($friction_data, 'label');
 		$friction_counts = array_column($friction_data, 'count');
 
-		// Get checkout time data with detailed logging
-		$checkout_time_data = array();
-		for ($i = 6; $i >= 0; $i--) {
-			$date = date('Y-m-d', strtotime("-$i days"));
-			
-			// Debug query for checkout time
-			$checkout_time_query = $wpdb->prepare(
-				"SELECT AVG(TIMESTAMPDIFF(SECOND, MIN(t1.created_at), MAX(t2.created_at)))
-				FROM (
-					SELECT session_id, created_at
-					FROM $table_name
-					WHERE DATE(created_at) = %s
-					AND type = 'checkout_start'
-				) t1
-				JOIN (
-					SELECT session_id, created_at
-					FROM $table_name
-					WHERE DATE(created_at) = %s
-					AND type = 'order_completed'
-				) t2 ON t1.session_id = t2.session_id",
-				$date,
-				$date
-			);
-			error_log('CFA: Checkout time query: ' . $checkout_time_query);
-			
-			$avg_time = $wpdb->get_var($checkout_time_query);
-			error_log('CFA: Checkout time result for ' . $date . ': ' . $avg_time);
-
-			$checkout_time_data[] = $avg_time ? round($avg_time, 0) : 0;
-		}
-
 		// Debug: Check if we have any data in the table
 		$total_records = $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
 		error_log('CFA: Total records in table: ' . $total_records);
@@ -228,12 +197,25 @@ class Core {
 		$record_types = $wpdb->get_results("SELECT type, COUNT(*) as count FROM $table_name GROUP BY type");
 		error_log('CFA: Record types in table: ' . print_r($record_types, true));
 
+		// Calculate current checkout abandonment rate
+		$checkout_data = $wpdb->get_row(
+			"SELECT 
+				SUM(CASE WHEN type = 'checkout_start' THEN 1 ELSE 0 END) as started,
+				SUM(CASE WHEN type = 'order_created' THEN 1 ELSE 0 END) as completed
+			FROM $table_name
+			WHERE type IN ('checkout_start', 'order_created')"
+		);
+		$current_abandonment_rate = 0;
+		if ($checkout_data && $checkout_data->started > 0) {
+			$current_abandonment_rate = round((($checkout_data->started - $checkout_data->completed) / $checkout_data->started) * 100, 1);
+		}
+
+		// Restore previous logic: use 7-day trend for abandonment rate
 		$chart_data = array(
 			'chartLabels' => $labels,
 			'abandonmentData' => $abandonment_data,
 			'frictionLabels' => $friction_labels,
 			'frictionData' => $friction_counts,
-			'checkoutTimeData' => $checkout_time_data,
 			'nonce' => wp_create_nonce('cfa-nonce'),
 		);
 
@@ -319,11 +301,20 @@ class Core {
 			return;
 		}
 
+		// Try to get product_id from removed_cart_contents or cart_contents
+		$product_id = null;
+		if (isset($cart->removed_cart_contents[$cart_item_key]['product_id'])) {
+			$product_id = $cart->removed_cart_contents[$cart_item_key]['product_id'];
+		} elseif (isset($cart->cart_contents[$cart_item_key]['product_id'])) {
+			$product_id = $cart->cart_contents[$cart_item_key]['product_id'];
+		}
+
 		$this->log_friction_point(
 			'remove_from_cart',
 			array(
 				'session_id' => $session_id,
 				'cart_item_key' => $cart_item_key,
+				'product_id' => $product_id,
 				'timestamp' => current_time('mysql')
 			)
 		);
@@ -489,29 +480,6 @@ class Core {
 	}
 
 	/**
-	 * Calculate the average checkout time
-	 *
-	 * @return float Average checkout time in seconds
-	 */
-	public function get_avg_checkout_time () {
-		global $wpdb;
-
-		$avg_time = $wpdb->get_var(
-			"SELECT AVG(TIMESTAMPDIFF(SECOND, start_time, end_time))
-			FROM (
-				SELECT 
-					MIN(created_at) as start_time,
-					MAX(created_at) as end_time
-				FROM {$wpdb->prefix}cfa_friction_points
-				WHERE type IN ('session_start', 'order_completed')
-				GROUP BY session_id
-			) as checkout_times"
-		);
-
-		return round( $avg_time, 2 );
-	}
-
-	/**
 	 * Get top friction points
 	 *
 	 * @return array Array of friction points with their counts
@@ -534,7 +502,8 @@ class Core {
 
 	/**
 	 * Handle AJAX track friction request
-	 */	public function handle_track_friction () {
+	 */
+	public function handle_track_friction () {
 		try {
 			// Enable error reporting for debugging
 			error_log('CFA: Received AJAX request: ' . print_r($_POST, true));
@@ -546,6 +515,14 @@ class Core {
 			$type = isset( $_POST['type'] ) ? sanitize_text_field( wp_unslash( $_POST['type'] ) ) : '';
 			$session_id = isset( $_POST['session_id'] ) ? sanitize_text_field( wp_unslash( $_POST['session_id'] ) ) : '';
 			$raw_data = isset( $_POST['data'] ) ? $_POST['data'] : '';
+
+			// Synchronize session ID with WooCommerce session
+			if ( class_exists( 'WC_Session' ) && function_exists( 'WC' ) && WC()->session ) {
+				if ( $session_id ) {
+					WC()->session->set( 'cfa_session_id', $session_id );
+					error_log('CFA: Synchronized WooCommerce session ID with JS session (forced): ' . $session_id);
+				}
+			}
 
 			// Handle both string and array data
 			if (is_string($raw_data)) {
@@ -560,6 +537,15 @@ class Core {
 			}
 
 			error_log('CFA: Processed data - Type: ' . $type . ', Data: ' . print_r($data, true));
+
+			// Ignore scroll events
+			if ($type === 'scroll') {
+				wp_send_json_success(array(
+					'message' => 'Scroll event ignored',
+					'type' => $type
+				));
+				return;
+			}
 
 			if ( ! empty( $type ) ) {
 				$result = $this->log_friction_point( $type, $data );

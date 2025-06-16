@@ -14,30 +14,14 @@ if ( ! defined( 'WPINC' ) ) {
 global $wpdb;
 $table_name = esc_sql( $wpdb->prefix . 'cfa_friction_points' );
 
-// Get cart abandonment data.
-$cart_abandonment = $wpdb->get_row(
-	"SELECT 
-		COUNT(DISTINCT session_id) as total_sessions,
-		COUNT(DISTINCT CASE WHEN type = 'order_completed' THEN session_id END) as completed_orders
-	FROM {$table_name}
-	WHERE type IN ('checkout_start', 'order_completed')
-	AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
-);
-
-// Calculate cart abandonment rate
-$cart_abandonment_rate = 0;
-if ($cart_abandonment->total_sessions > 0) {
-	$cart_abandonment_rate = round(
-		(($cart_abandonment->total_sessions - $cart_abandonment->completed_orders) / $cart_abandonment->total_sessions) * 100,
-		1
-	);
-}
-
-// Get cart analytics stats
+// Get cart analytics data
+$cart_add = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table_name} WHERE type = %s", 'add_to_cart'));
+$cart_remove = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table_name} WHERE type = %s", 'remove_from_cart'));
+$total_cart_actions = $cart_add + $cart_remove;
 $cart_stats = array(
-	'total_sessions' => $cart_abandonment->total_sessions,
-	'completed_orders' => $cart_abandonment->completed_orders,
-	'abandonment_rate' => $cart_abandonment_rate
+	'total_cart_actions' => $total_cart_actions,
+	'add_to_cart' => $cart_add,
+	'remove_from_cart' => $cart_remove,
 );
 
 error_log('CFA: Cart Analytics Data: ' . print_r($cart_stats, true));
@@ -51,6 +35,12 @@ $checkout_data = $wpdb->get_row(
 	FROM {$table_name}
 	WHERE type IN ('checkout_start', 'order_created')"
 );
+
+// Calculate checkout abandonment rate using started and completed
+$checkout_abandonment_rate = 0;
+if ($checkout_data && $checkout_data->started > 0) {
+    $checkout_abandonment_rate = round((($checkout_data->started - $checkout_data->completed) / $checkout_data->started) * 100, 1);
+}
 
 // Get form abandonment data.
 $form_abandonment = $wpdb->get_row(
@@ -139,6 +129,32 @@ foreach ( $abandonment_errors as $row ) {
 arsort( $error_counts );
 $error_counts = array_slice( $error_counts, 0, 5, true );
 
+// Get top removed products
+$top_removed_products = $wpdb->get_results(
+    $wpdb->prepare(
+        "SELECT JSON_EXTRACT(data, '$.product_id') as product_id, COUNT(*) as count
+        FROM {$table_name}
+        WHERE type = %s AND JSON_EXTRACT(data, '$.product_id') IS NOT NULL
+        GROUP BY product_id
+        ORDER BY count DESC
+        LIMIT 5",
+        'remove_from_cart'
+    )
+);
+
+// Fetch product names for display
+$removed_products_display = array();
+foreach ($top_removed_products as $row) {
+    $product_id = intval($row->product_id);
+    $count = intval($row->count);
+    $product = wc_get_product($product_id);
+    $product_name = $product ? $product->get_name() : __('Unknown Product', 'checkout-friction-analyzer');
+    $removed_products_display[] = array(
+        'name' => $product_name,
+        'count' => $count,
+    );
+}
+
 // Placeholder data for dashboard sections if no real data is present
 if ( empty( $validation_errors ) ) {
 	$validation_errors = array(
@@ -173,6 +189,18 @@ function cfa_get_badge_class( $count ) {
 }
 ?>
 
+<style>
+.cfa-slide-toggle {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.cfa-slide-toggle.open {
+    max-height: 500px; /* Large enough for the list */
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+</style>
+
 <div class="wrap">
 	<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
 
@@ -182,18 +210,58 @@ function cfa_get_badge_class( $count ) {
 			<h2><?php esc_html_e( 'Cart Analytics', 'checkout-friction-analyzer' ); ?></h2>
 			<div class="cfa-stats">
 				<div class="cfa-stat">
-					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['total_sessions']); ?></span>
-					<span class="cfa-stat-label"><?php esc_html_e('Total Sessions', 'checkout-friction-analyzer'); ?></span>
+					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['total_cart_actions']); ?></span>
+					<span class="cfa-stat-label"><?php esc_html_e('Total Cart Actions', 'checkout-friction-analyzer'); ?></span>
 				</div>
 				<div class="cfa-stat">
-					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['completed_orders']); ?></span>
-					<span class="cfa-stat-label"><?php esc_html_e('Completed Orders', 'checkout-friction-analyzer'); ?></span>
+					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['add_to_cart']); ?></span>
+					<span class="cfa-stat-label"><?php esc_html_e('Add to Cart', 'checkout-friction-analyzer'); ?></span>
 				</div>
 				<div class="cfa-stat">
-					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['abandonment_rate']); ?>%</span>
-					<span class="cfa-stat-label"><?php esc_html_e('Cart Abandonment Rate', 'checkout-friction-analyzer'); ?></span>
+					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['remove_from_cart']); ?></span>
+					<span class="cfa-stat-label"><?php esc_html_e('Remove from Cart', 'checkout-friction-analyzer'); ?></span>
 				</div>
 			</div>
+			<?php if (!empty($removed_products_display)) : ?>
+				<div class="cfa-top-removed-products">
+					<div style="display: flex; align-items: center; justify-content: space-between;">
+						<h3 style="margin: 0;"><?php esc_html_e('Top Removed Products', 'checkout-friction-analyzer'); ?></h3>
+						<button id="cfa-toggle-removed-products" type="button" style="margin-left: 10px; padding: 4px 12px; border-radius: 4px; border: 1px solid #ccc; background: #f8f9fa; cursor: pointer; font-size: 14px;">
+							<span id="cfa-toggle-removed-products-label"><?php esc_html_e('Show', 'checkout-friction-analyzer'); ?></span> ▼
+						</button>
+					</div>
+					<ul class="cfa-error-list cfa-slide-toggle" id="cfa-removed-products-list" style="margin-top: 10px;">
+						<?php foreach ($removed_products_display as $product) : ?>
+							<li>
+								<span class="cfa-badge cfa-badge-medium"><?php echo esc_html($product['count']); ?></span>
+								<span class="cfa-error-message"><?php echo esc_html($product['name']); ?></span>
+							</li>
+						<?php endforeach; ?>
+					</ul>
+				</div>
+				<script>
+				document.addEventListener('DOMContentLoaded', function() {
+					var btn = document.getElementById('cfa-toggle-removed-products');
+					var list = document.getElementById('cfa-removed-products-list');
+					var label = document.getElementById('cfa-toggle-removed-products-label');
+					var open = false;
+					if (btn && list && label) {
+						btn.addEventListener('click', function() {
+							open = !open;
+							if (open) {
+								list.classList.add('open');
+								label.textContent = '<?php echo esc_js(__('Hide', 'checkout-friction-analyzer')); ?>';
+							} else {
+								list.classList.remove('open');
+								label.textContent = '<?php echo esc_js(__('Show', 'checkout-friction-analyzer')); ?>';
+							}
+						});
+						// Ensure closed on load
+						list.classList.remove('open');
+					}
+				});
+				</script>
+			<?php endif; ?>
 		</div>
 
 		<!-- Checkout Analytics -->
@@ -209,14 +277,8 @@ function cfa_get_badge_class( $count ) {
 					<span class="cfa-stat-label"><?php esc_html_e( 'Orders Completed', 'checkout-friction-analyzer' ); ?></span>
 				</div>
 				<div class="cfa-stat">
-					<span class="cfa-stat-value">
-						<?php 
-						echo $checkout_data->started > 0 
-							? esc_html( round( ( $checkout_data->completed / $checkout_data->started ) * 100, 1 ) ) 
-							: '0';
-						?>%
-					</span>
-					<span class="cfa-stat-label"><?php esc_html_e( 'Conversion Rate', 'checkout-friction-analyzer' ); ?></span>
+					<span class="cfa-stat-value"><?php echo esc_html($checkout_abandonment_rate); ?>%</span>
+					<span class="cfa-stat-label"><?php esc_html_e( 'Checkout Abandonment Rate', 'checkout-friction-analyzer' ); ?></span>
 				</div>
 			</div>
 		</div>
@@ -394,14 +456,6 @@ function cfa_get_badge_class( $count ) {
 			<h2><?php esc_html_e( 'Friction Points', 'checkout-friction-analyzer' ); ?></h2>
 			<div class="cfa-chart-container">
 				<canvas id="frictionPointsChart" width="400" height="120"></canvas>
-			</div>
-		</div>
-
-		<!-- Checkout Time Chart -->
-		<div class="cfa-card">
-			<h2><?php esc_html_e( 'Checkout Time', 'checkout-friction-analyzer' ); ?></h2>
-			<div class="cfa-chart-container">
-				<canvas id="checkoutTimeChart" width="400" height="120"></canvas>
 			</div>
 		</div>
 	</div>

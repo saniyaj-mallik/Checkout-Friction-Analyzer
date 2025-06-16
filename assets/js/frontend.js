@@ -20,10 +20,10 @@
                 type: type,
                 data: JSON.stringify(data)
             },
-            success: function(response) {
+            success: function (response) {
                 console.log('Friction tracking success:', response);
             },
-            error: function(xhr, status, error) {
+            error: function (xhr, status, error) {
                 console.error('Friction tracking error:', {
                     status: status,
                     error: error,
@@ -41,7 +41,7 @@
         }
         return sessionId;
     }    // Initialize tracking when document is ready
-    $(document).ready(function() {
+    $(document).ready(function () {
         // Generate and store session ID if not exists
         let sessionId = sessionStorage.getItem('cfa_session_id');
         if (!sessionId) {
@@ -95,10 +95,10 @@
         var errors = $('.woocommerce-error li').map(function () {
             return $(this).text();
         }).get();
-        
+
         // Store latest errors in sessionStorage
         sessionStorage.setItem('cfa_last_checkout_errors', JSON.stringify(errors));
-        
+
         trackFriction('validation_error', {
             errors: errors,
             session_id: getSessionId()
@@ -106,13 +106,13 @@
     });
 
     // Track cart updates
-    $(document.body).on('added_to_cart removed_from_cart', function(event, fragments, cart_hash, $button) {
+    $(document.body).on('added_to_cart removed_from_cart', function (event, fragments, cart_hash, $button) {
         const sessionId = getSessionId();
         const productId = $button.data('product_id');
         const quantity = $button.data('quantity');
-        
+
         console.log('CFA: Cart event - Type:', event.type, 'Product ID:', productId, 'Quantity:', quantity);
-        
+
         trackFriction(event.type, {
             session_id: sessionId,
             product_id: productId,
@@ -123,11 +123,11 @@
     });
 
     // Track cart item quantity changes
-    $(document.body).on('cart_item_removed', function(event, cart_item_key) {
+    $(document.body).on('cart_item_removed', function (event, cart_item_key) {
         const sessionId = getSessionId();
-        
+
         console.log('CFA: Cart item removed - Key:', cart_item_key);
-        
+
         trackFriction('cart_item_removed', {
             session_id: sessionId,
             cart_item_key: cart_item_key,
@@ -136,12 +136,12 @@
     });
 
     // Track cart updates
-    $(document.body).on('updated_cart_totals', function() {
+    $(document.body).on('updated_cart_totals', function () {
         const sessionId = getSessionId();
         const cartItems = $('.woocommerce-cart-form__cart-item').length;
-        
+
         console.log('CFA: Cart updated - Items:', cartItems);
-        
+
         trackFriction('cart_updated', {
             session_id: sessionId,
             cart_items: cartItems,
@@ -178,16 +178,16 @@
     let orderCompleted = false;
 
     // Set order completed flag when order is processed
-    $(document.body).on('checkout_place_order', function() {
+    $(document.body).on('checkout_place_order', function () {
         orderCompleted = true;
     });
 
-    $(window).on('beforeunload', function() {
+    $(window).on('beforeunload', function () {
         if (isCheckoutPage() && !orderCompleted && !isOrderComplete()) {
             var abandonedFields = [];
-            
+
             // Get all form fields
-            $('form.checkout input, form.checkout select, form.checkout textarea').each(function() {
+            $('form.checkout input, form.checkout select, form.checkout textarea').each(function () {
                 if ($(this).val() === '') {
                     abandonedFields.push({
                         name: $(this).attr('name'),
@@ -196,7 +196,7 @@
                     });
                 }
             });
-            
+
             // Get last validation errors from sessionStorage
             var lastErrors = [];
             try {
@@ -204,7 +204,7 @@
             } catch (e) {
                 lastErrors = [];
             }
-            
+
             trackFriction('form_abandonment', {
                 time_spent: (new Date() - formStartTime) / 1000,
                 fields_filled: $('form.checkout input[value!=""]').length,
@@ -249,7 +249,7 @@
         user_agent: navigator.userAgent,
         screen_width: window.innerWidth,
         screen_height: window.innerHeight
-    });    function getCurrentCheckoutStep() {
+    }); function getCurrentCheckoutStep() {
         if ($('#payment').is(':visible')) {
             return 'payment';
         } else if ($('#customer_details').is(':visible')) {

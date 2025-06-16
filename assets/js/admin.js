@@ -143,6 +143,10 @@
             return;
         }
         var ctx = chartElem.getContext('2d');
+        // Color palette for bars
+        var colors = [
+            '#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#17a2b8', '#fd7e14', '#20c997', '#6610f2', '#e83e8c'
+        ];
         window.frictionPointsChart = new Chart(ctx, {
             type: 'bar',
             data: {
@@ -150,17 +154,69 @@
                 datasets: [{
                     label: 'Occurrences',
                     data: data,
-                    backgroundColor: '#007bff'
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderRadius: 8,
+                    maxBarThickness: 48,
                 }]
             },
             options: {
                 responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.85)',
+                        titleFont: { size: 14, weight: 'bold' },
+                        bodyFont: { size: 13 },
+                        padding: 10,
+                        cornerRadius: 6,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y;
+                            }
+                        }
+                    },
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'end',
+                        color: '#222',
+                        font: { weight: 'bold', size: 13 },
+                        formatter: function(value) { return value; }
                     }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: { size: 13, weight: 'bold' },
+                            color: '#333'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#f0f0f0',
+                            borderDash: [4, 4]
+                        },
+                        ticks: {
+                            stepSize: 1,
+                            font: { size: 12 },
+                            color: '#888'
+                        }
+                    }
+                },
+                layout: {
+                    padding: { top: 20, right: 20, left: 10, bottom: 10 }
+                },
+                animation: {
+                    duration: 700,
+                    easing: 'easeOutQuart'
                 }
-            }
+            },
+            plugins: [window.ChartDataLabels || {}]
         });
     }
 
