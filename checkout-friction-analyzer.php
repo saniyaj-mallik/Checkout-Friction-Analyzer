@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: Checkout Friction Analyzer
- * Plugin URI: https://github.com/yourusername/checkout-friction-analyzer
+ * Plugin URI: https://wisdmlabs.com/
  * Description: Analyzes and identifies friction points in your WooCommerce checkout process to improve conversion rates.
  * Version: 1.0.0
- * Author: Your Name
- * Author URI: https://yourwebsite.com
+ * Author: WisdmLabs
+ * Author URI: https://wisdmlabs.com/
  * Text Domain: checkout-friction-analyzer
  * Domain Path: /languages
  * Requires at least: 5.8
