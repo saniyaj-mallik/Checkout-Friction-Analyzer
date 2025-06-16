@@ -1,14 +1,14 @@
-(function($) {
+(function ($) {
     'use strict';
 
     // Initialize charts when document is ready
-    $(document).ready(function() {
+    $(document).ready(function () {
         console.log('Initializing charts with data:', cfaData);
-        
+
         // Initialize charts with data from PHP
         if (cfaData) {
             console.log('CFA: Initializing charts with data:', cfaData);
-            
+
             // Initialize abandonment rate chart
             initializeAbandonmentChart(
                 cfaData.chartLabels,
@@ -76,7 +76,7 @@
                             drawBorder: false
                         },
                         ticks: {
-                            callback: function(value) {
+                            callback: function (value) {
                                 return value + '%';
                             },
                             font: {
@@ -123,10 +123,10 @@
                         padding: 12,
                         cornerRadius: 4,
                         callbacks: {
-                            label: function(context) {
+                            label: function (context) {
                                 return 'Abandonment Rate: ' + context.raw + '%';
                             },
-                            title: function(context) {
+                            title: function (context) {
                                 return 'Date: ' + context[0].label;
                             }
                         }
@@ -172,7 +172,7 @@
                         padding: 10,
                         cornerRadius: 6,
                         callbacks: {
-                            label: function(context) {
+                            label: function (context) {
                                 return context.dataset.label + ': ' + context.parsed.y;
                             }
                         }
@@ -182,7 +182,7 @@
                         align: 'end',
                         color: '#222',
                         font: { weight: 'bold', size: 13 },
-                        formatter: function(value) { return value; }
+                        formatter: function (value) { return value; }
                     }
                 },
                 scales: {
@@ -244,7 +244,7 @@
                     y: {
                         beginAtZero: true,
                         ticks: {
-                            callback: function(value) {
+                            callback: function (value) {
                                 return value + 's';
                             }
                         }
@@ -264,13 +264,13 @@
                 action: 'cfa_refresh_dashboard',
                 nonce: cfaData.nonce
             },
-            success: function(response) {
+            success: function (response) {
                 console.log('Dashboard refresh response:', response);
                 if (response.success) {
                     // Update chart data
                     cfaData = response.data;
                     console.log('Updated chart data:', cfaData);
-                    
+
                     // Destroy existing charts
                     if (window.abandonmentChart) {
                         window.abandonmentChart.destroy();
@@ -281,7 +281,7 @@
                     if (window.checkoutTimeChart) {
                         window.checkoutTimeChart.destroy();
                     }
-                    
+
                     // Reinitialize charts with new data
                     initializeAbandonmentChart(
                         cfaData.chartLabels,
@@ -295,14 +295,14 @@
                         cfaData.chartLabels,
                         cfaData.checkoutTimeData
                     );
-                    
+
                     // Update dashboard stats
                     updateDashboardStats(response.data);
                 } else {
                     console.error('Failed to refresh dashboard:', response);
                 }
             },
-            error: function(xhr, status, error) {
+            error: function (xhr, status, error) {
                 console.error('Dashboard refresh error:', {
                     status: status,
                     error: error,
@@ -314,7 +314,7 @@
 
     // Update dashboard statistics
     function updateDashboardStats(data) {
-        $('.cfa-stat-value').each(function() {
+        $('.cfa-stat-value').each(function () {
             const statType = $(this).data('stat');
             if (data[statType]) {
                 $(this).text(data[statType]);
@@ -326,11 +326,11 @@
     setInterval(refreshDashboard, 300000);
 
     // Handle settings form submission
-    $('#cfa-settings-form').on('submit', function(e) {
+    $('#cfa-settings-form').on('submit', function (e) {
         e.preventDefault();
-        
+
         const formData = $(this).serialize();
-        
+
         $.ajax({
             url: ajaxurl,
             type: 'POST',
@@ -339,7 +339,7 @@
                 nonce: cfaData.nonce,
                 settings: formData
             },
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     showNotice('success', 'Settings saved successfully.');
                 } else {
@@ -353,9 +353,9 @@
     function showNotice(type, message) {
         const notice = $('<div class="notice notice-' + type + ' is-dismissible"><p>' + message + '</p></div>');
         $('.wrap h1').after(notice);
-        
-        setTimeout(function() {
-            notice.fadeOut(function() {
+
+        setTimeout(function () {
+            notice.fadeOut(function () {
                 $(this).remove();
             });
         }, 3000);
