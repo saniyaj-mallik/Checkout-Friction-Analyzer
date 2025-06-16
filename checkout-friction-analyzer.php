@@ -29,32 +29,42 @@ define( 'CFA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CFA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'CFA_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
-// Add HPOS compatibility
-add_action('before_woocommerce_init', function() {
-	if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
-		\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+// Add HPOS compatibility.
+add_action(
+	'before_woocommerce_init',
+	function () {
+		if ( class_exists( '\Automattic\WooCommerce\Utilities\FeaturesUtil' ) ) {
+			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
+		}
 	}
-});
+);
 
 // Autoloader.
-spl_autoload_register( function ( $class ) {
-	$prefix = 'CheckoutFrictionAnalyzer\\';
-	$base_dir = CFA_PLUGIN_DIR . 'includes/';
+spl_autoload_register(
+	function ( $class_name ) {
+		$prefix     = 'CheckoutFrictionAnalyzer\\';
+		$base_dir   = CFA_PLUGIN_DIR . 'includes/';
+		$len        = strlen( $prefix );
 
-	$len = strlen( $prefix );
-	if ( strncmp( $prefix, $class, $len ) !== 0 ) {
-		return;
+		if ( strncmp( $prefix, $class_name, $len ) !== 0 ) {
+			return;
+		}
+
+		$relative_class = substr( $class_name, $len );
+		$class_file    = $base_dir . str_replace( '\\', '/', $relative_class ) . '.php';
+
+		if ( file_exists( $class_file ) ) {
+			require $class_file;
+		}
 	}
+);
 
-	$relative_class = substr( $class, $len );
-	$file = $base_dir . str_replace( '\\', '/', $relative_class ) . '.php';
-
-	if ( file_exists( $file ) ) {
-		require $file;
-	}
-} );
-
-// Initialize the plugin.
+/**
+ * Initialize the plugin.
+ *
+ * @since 1.0.0
+ * @return void
+ */
 function cfa_init() {
 	// Check if WooCommerce is active.
 	if ( ! class_exists( 'WooCommerce' ) ) {
@@ -62,10 +72,12 @@ function cfa_init() {
 			'admin_notices',
 			function () {
 				?>
-                <div class="error">
-                    <p><?php _e( 'Checkout Friction Analyzer requires WooCommerce to be installed and active.', 'checkout-friction-analyzer' ); ?></p>
-                </div>
-                <?php
+				<div class="error">
+					<p>
+						<?php esc_html_e( 'Checkout Friction Analyzer requires WooCommerce to be installed and active.', 'checkout-friction-analyzer' ); ?>
+					</p>
+				</div>
+				<?php
 			}
 		);
 		return;
@@ -75,10 +87,8 @@ function cfa_init() {
 	require_once CFA_PLUGIN_DIR . 'includes/class-cfa-core.php';
 	new CheckoutFrictionAnalyzer\Core();
 }
-add_action(
-	'plugins_loaded',
-	'cfa_init'
-);
+
+add_action( 'plugins_loaded', 'cfa_init' );
 
 // Activation hook.
 register_activation_hook(
