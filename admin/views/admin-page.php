@@ -18,20 +18,17 @@ $table_name = esc_sql( $wpdb->prefix . 'cfa_friction_points' );
 $cart_abandonment = $wpdb->get_row(
 	"SELECT 
 		COUNT(DISTINCT session_id) as total_sessions,
-		SUM(CASE WHEN type = 'add_to_cart' THEN 1 ELSE 0 END) as added,
-		SUM(CASE WHEN type = 'remove_from_cart' THEN 1 ELSE 0 END) as removed,
-		COUNT(DISTINCT CASE WHEN type = 'add_to_cart' THEN session_id END) as sessions_with_adds,
-		COUNT(DISTINCT CASE WHEN type = 'remove_from_cart' THEN session_id END) as sessions_with_removes
+		COUNT(DISTINCT CASE WHEN type = 'order_completed' THEN session_id END) as completed_orders
 	FROM {$table_name}
-	WHERE type IN ('add_to_cart', 'remove_from_cart')
+	WHERE type IN ('checkout_start', 'order_completed')
 	AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
 );
 
 // Calculate cart abandonment rate
 $cart_abandonment_rate = 0;
-if ($cart_abandonment->sessions_with_adds > 0) {
+if ($cart_abandonment->total_sessions > 0) {
 	$cart_abandonment_rate = round(
-		(($cart_abandonment->sessions_with_adds - $cart_abandonment->sessions_with_removes) / $cart_abandonment->sessions_with_adds) * 100,
+		(($cart_abandonment->total_sessions - $cart_abandonment->completed_orders) / $cart_abandonment->total_sessions) * 100,
 		1
 	);
 }
@@ -39,8 +36,7 @@ if ($cart_abandonment->sessions_with_adds > 0) {
 // Get cart analytics stats
 $cart_stats = array(
 	'total_sessions' => $cart_abandonment->total_sessions,
-	'items_added' => $cart_abandonment->added,
-	'items_removed' => $cart_abandonment->removed,
+	'completed_orders' => $cart_abandonment->completed_orders,
 	'abandonment_rate' => $cart_abandonment_rate
 );
 
@@ -190,12 +186,8 @@ function cfa_get_badge_class( $count ) {
 					<span class="cfa-stat-label"><?php esc_html_e('Total Sessions', 'checkout-friction-analyzer'); ?></span>
 				</div>
 				<div class="cfa-stat">
-					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['items_added']); ?></span>
-					<span class="cfa-stat-label"><?php esc_html_e('Items Added', 'checkout-friction-analyzer'); ?></span>
-				</div>
-				<div class="cfa-stat">
-					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['items_removed']); ?></span>
-					<span class="cfa-stat-label"><?php esc_html_e('Items Removed', 'checkout-friction-analyzer'); ?></span>
+					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['completed_orders']); ?></span>
+					<span class="cfa-stat-label"><?php esc_html_e('Completed Orders', 'checkout-friction-analyzer'); ?></span>
 				</div>
 				<div class="cfa-stat">
 					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['abandonment_rate']); ?>%</span>

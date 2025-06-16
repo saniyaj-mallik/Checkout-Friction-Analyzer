@@ -175,8 +175,15 @@
 
     // Track form abandonment
     let formStartTime = new Date();
+    let orderCompleted = false;
+
+    // Set order completed flag when order is processed
+    $(document.body).on('checkout_place_order', function() {
+        orderCompleted = true;
+    });
+
     $(window).on('beforeunload', function() {
-        if (isCheckoutPage() && !isOrderComplete()) {
+        if (isCheckoutPage() && !orderCompleted && !isOrderComplete()) {
             var abandonedFields = [];
             
             // Get all form fields
