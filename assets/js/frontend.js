@@ -42,16 +42,41 @@
         return sessionId;
     }    // Initialize tracking when document is ready
     $(document).ready(function() {
+        // Generate and store session ID if not exists
+        let sessionId = sessionStorage.getItem('cfa_session_id');
+        if (!sessionId) {
+            sessionId = Math.random().toString(36).substring(2, 15);
+            sessionStorage.setItem('cfa_session_id', sessionId);
+        }
+
         // Track session start
         trackFriction('session_start', {
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            session_id: sessionId
         });
 
         // Track page load time
         const pageLoadTime = performance.now();
         trackFriction('page_load', {
-            load_time: pageLoadTime
+            load_time: pageLoadTime,
+            session_id: sessionId
         });
+
+        // If on checkout page, track checkout start
+        if (isCheckoutPage()) {
+            trackFriction('checkout_start', {
+                timestamp: new Date().toISOString(),
+                session_id: sessionId
+            });
+        }
+
+        // If on order received page, track order completion
+        if (isOrderComplete()) {
+            trackFriction('order_completed', {
+                timestamp: new Date().toISOString(),
+                session_id: sessionId
+            });
+        }
     });
 
     // Track form field interactions
@@ -60,7 +85,8 @@
             field_id: $(this).attr('id'),
             field_name: $(this).attr('name'),
             field_type: $(this).attr('type'),
-            value: $(this).val()
+            value: $(this).val(),
+            session_id: getSessionId()
         });
     });
 
@@ -69,82 +95,97 @@
         var errors = $('.woocommerce-error li').map(function () {
             return $(this).text();
         }).get();
+        
         // Store latest errors in sessionStorage
         sessionStorage.setItem('cfa_last_checkout_errors', JSON.stringify(errors));
+        
         trackFriction('validation_error', {
-            errors: errors
+            errors: errors,
+            session_id: getSessionId()
         });
     });
 
     // Track cart updates
-    $(document.body).on('added_to_cart removed_from_cart', function (event, fragments, cart_hash, $button) {
+    $(document.body).on('added_to_cart removed_from_cart', function(event, fragments, cart_hash, $button) {
+        const sessionId = getSessionId();
+        const productId = $button.data('product_id');
+        const quantity = $button.data('quantity');
+        
+        console.log('CFA: Cart event - Type:', event.type, 'Product ID:', productId, 'Quantity:', quantity);
+        
         trackFriction(event.type, {
-            product_id: $button.data('product_id'),
-            quantity: $button.data('quantity')
+            session_id: sessionId,
+            product_id: productId,
+            quantity: quantity,
+            cart_hash: cart_hash,
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    // Track cart item quantity changes
+    $(document.body).on('cart_item_removed', function(event, cart_item_key) {
+        const sessionId = getSessionId();
+        
+        console.log('CFA: Cart item removed - Key:', cart_item_key);
+        
+        trackFriction('cart_item_removed', {
+            session_id: sessionId,
+            cart_item_key: cart_item_key,
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    // Track cart updates
+    $(document.body).on('updated_cart_totals', function() {
+        const sessionId = getSessionId();
+        const cartItems = $('.woocommerce-cart-form__cart-item').length;
+        
+        console.log('CFA: Cart updated - Items:', cartItems);
+        
+        trackFriction('cart_updated', {
+            session_id: sessionId,
+            cart_items: cartItems,
+            timestamp: new Date().toISOString()
         });
     });
 
     // Track checkout steps
     $('form.checkout').on('checkout_place_order', function () {
         trackFriction('checkout_submit', {
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            session_id: getSessionId()
         });
     });
 
     // Track payment method changes
     $('form.checkout').on('payment_method_selected', function () {
         trackFriction('payment_method_change', {
-            method: $('input[name="payment_method"]:checked').val()
+            method: $('input[name="payment_method"]:checked').val(),
+            session_id: getSessionId()
         });
     });
 
     // Track shipping method changes
     $(document.body).on('updated_checkout', function () {
         trackFriction('shipping_method_change', {
-            method: $('input[name="shipping_method[0]"]:checked').val()
+            method: $('input[name="shipping_method[0]"]:checked').val(),
+            session_id: getSessionId()
         });
-    });    // Track form abandonment
+    });
+
+    // Track form abandonment
     let formStartTime = new Date();
-    $(window).on('beforeunload', function () {
-        if ($('form.checkout').length) {
-            // Collect required fields that are empty
+    $(window).on('beforeunload', function() {
+        if (isCheckoutPage() && !isOrderComplete()) {
             var abandonedFields = [];
-            $('form.checkout input[required], form.checkout select[required], form.checkout textarea[required]').each(function () {
-                var $field = $(this);
-                var fieldValue = $field.val();
-                var fieldName = $field.attr('name');
-                
-                // Skip if field doesn't have a name
-                if (!fieldName) return;
-                
-                // Consider field abandoned if:
-                // 1. Empty or only whitespace
-                // 2. Invalid format (for specific field types)
-                var isAbandoned = false;
-                
-                if (!fieldValue || !fieldValue.trim()) {
-                    isAbandoned = true;
-                } else {
-                    // Additional validation for specific fields
-                    switch(fieldName) {
-                        case 'billing_email':
-                            isAbandoned = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue);
-                            break;
-                        case 'billing_phone':
-                            isAbandoned = !/^\d{10,}$/.test(fieldValue.replace(/[^0-9]/g, ''));
-                            break;
-                        case 'billing_postcode':
-                            isAbandoned = !/^[A-Z0-9]{3,}$/.test(fieldValue.toUpperCase());
-                            break;
-                    }
-                }
-                
-                if (isAbandoned) {
+            
+            // Get all form fields
+            $('form.checkout input, form.checkout select, form.checkout textarea').each(function() {
+                if ($(this).val() === '') {
                     abandonedFields.push({
-                        id: $field.attr('id'),
-                        name: fieldName,
-                        type: $field.attr('type'),
-                        value: fieldValue // Include the invalid value for analysis
+                        name: $(this).attr('name'),
+                        type: $(this).attr('type'),
+                        id: $(this).attr('id')
                     });
                 }
             });
@@ -157,28 +198,12 @@
                 lastErrors = [];
             }
             
-            // Convert validation errors into abandoned fields if not already included
-            lastErrors.forEach(function(error) {
-                var fieldName = '';
-                if (error.includes('PIN Code')) fieldName = 'billing_postcode';
-                else if (error.includes('Street address')) fieldName = 'billing_address_1';
-                else if (error.includes('email')) fieldName = 'billing_email';
-                else if (error.includes('phone')) fieldName = 'billing_phone';
-                
-                if (fieldName && !abandonedFields.some(f => f.name === fieldName)) {
-                    abandonedFields.push({
-                        name: fieldName,
-                        type: 'text',
-                        error: error.trim()
-                    });
-                }
-            });
-            
             trackFriction('form_abandonment', {
                 time_spent: (new Date() - formStartTime) / 1000,
                 fields_filled: $('form.checkout input[value!=""]').length,
                 abandoned_fields: abandonedFields,
-                last_errors: lastErrors.map(error => error.trim())
+                last_errors: lastErrors.map(error => error.trim()),
+                session_id: getSessionId()
             });
         }
     });

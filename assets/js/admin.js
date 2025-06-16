@@ -3,31 +3,59 @@
 
     // Initialize charts when document is ready
     $(document).ready(function() {
-        initializeAbandonmentChart();
-        initializeFrictionPointsChart();
-        initializeCheckoutTimeChart();
+        console.log('Initializing charts with data:', cfaData);
+        
+        // Initialize charts with data from PHP
+        if (cfaData) {
+            console.log('CFA: Initializing charts with data:', cfaData);
+            
+            // Initialize abandonment rate chart
+            initializeAbandonmentChart(
+                cfaData.chartLabels,
+                cfaData.abandonmentData
+            );
+
+            // Initialize friction points chart
+            initializeFrictionPointsChart(
+                cfaData.frictionLabels,
+                cfaData.frictionData
+            );
+
+            // Initialize checkout time chart
+            initializeCheckoutTimeChart(
+                cfaData.chartLabels,
+                cfaData.checkoutTimeData
+            );
+        }
     });
 
     // Abandonment rate chart
-    function initializeAbandonmentChart() {
+    function initializeAbandonmentChart(labels, data) {
         var chartElem = document.getElementById('abandonmentChart');
         if (!chartElem) {
+            console.error('Abandonment chart element not found');
             return;
         }
+        console.log('Initializing abandonment chart with data:', {
+            labels: labels,
+            data: data
+        });
         var ctx = chartElem.getContext('2d');
-        new Chart(ctx, {
+        window.abandonmentChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: cfaData.chartLabels,
+                labels: labels,
                 datasets: [{
                     label: 'Abandonment Rate',
-                    data: cfaData.abandonmentData,
+                    data: data,
                     borderColor: '#dc3545',
-                    tension: 0.1
+                    tension: 0.1,
+                    fill: false
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -38,25 +66,38 @@
                             }
                         }
                     }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'Abandonment Rate: ' + context.raw + '%';
+                            }
+                        }
+                    }
                 }
             }
         });
     }
 
     // Friction points chart
-    function initializeFrictionPointsChart() {
+    function initializeFrictionPointsChart(labels, data) {
         var chartElem = document.getElementById('frictionPointsChart');
         if (!chartElem) {
             return;
         }
         var ctx = chartElem.getContext('2d');
-        new Chart(ctx, {
+        window.frictionPointsChart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: cfaData.frictionLabels,
+                labels: labels,
                 datasets: [{
                     label: 'Occurrences',
-                    data: cfaData.frictionData,
+                    data: data,
                     backgroundColor: '#007bff'
                 }]
             },
@@ -72,19 +113,19 @@
     }
 
     // Checkout time chart
-    function initializeCheckoutTimeChart() {
+    function initializeCheckoutTimeChart(labels, data) {
         var chartElem = document.getElementById('checkoutTimeChart');
         if (!chartElem) {
             return;
         }
         var ctx = chartElem.getContext('2d');
-        new Chart(ctx, {
+        window.checkoutTimeChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: cfaData.chartLabels,
+                labels: labels,
                 datasets: [{
                     label: 'Average Checkout Time',
-                    data: cfaData.checkoutTimeData,
+                    data: data,
                     borderColor: '#28a745',
                     tension: 0.1
                 }]
@@ -107,6 +148,7 @@
 
     // Refresh dashboard data
     function refreshDashboard() {
+        console.log('Refreshing dashboard data...');
         $.ajax({
             url: ajaxurl,
             type: 'POST',
@@ -115,9 +157,49 @@
                 nonce: cfaData.nonce
             },
             success: function(response) {
+                console.log('Dashboard refresh response:', response);
                 if (response.success) {
+                    // Update chart data
+                    cfaData = response.data;
+                    console.log('Updated chart data:', cfaData);
+                    
+                    // Destroy existing charts
+                    if (window.abandonmentChart) {
+                        window.abandonmentChart.destroy();
+                    }
+                    if (window.frictionPointsChart) {
+                        window.frictionPointsChart.destroy();
+                    }
+                    if (window.checkoutTimeChart) {
+                        window.checkoutTimeChart.destroy();
+                    }
+                    
+                    // Reinitialize charts with new data
+                    initializeAbandonmentChart(
+                        cfaData.chartLabels,
+                        cfaData.abandonmentData
+                    );
+                    initializeFrictionPointsChart(
+                        cfaData.frictionLabels,
+                        cfaData.frictionData
+                    );
+                    initializeCheckoutTimeChart(
+                        cfaData.chartLabels,
+                        cfaData.checkoutTimeData
+                    );
+                    
+                    // Update dashboard stats
                     updateDashboardStats(response.data);
+                } else {
+                    console.error('Failed to refresh dashboard:', response);
                 }
+            },
+            error: function(xhr, status, error) {
+                console.error('Dashboard refresh error:', {
+                    status: status,
+                    error: error,
+                    response: xhr.responseText
+                });
             }
         });
     }

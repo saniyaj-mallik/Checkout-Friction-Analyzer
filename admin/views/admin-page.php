@@ -17,12 +17,34 @@ $table_name = esc_sql( $wpdb->prefix . 'cfa_friction_points' );
 // Get cart abandonment data.
 $cart_abandonment = $wpdb->get_row(
 	"SELECT 
-		COUNT(*) as total,
+		COUNT(DISTINCT session_id) as total_sessions,
 		SUM(CASE WHEN type = 'add_to_cart' THEN 1 ELSE 0 END) as added,
-		SUM(CASE WHEN type = 'remove_from_cart' THEN 1 ELSE 0 END) as removed
+		SUM(CASE WHEN type = 'remove_from_cart' THEN 1 ELSE 0 END) as removed,
+		COUNT(DISTINCT CASE WHEN type = 'add_to_cart' THEN session_id END) as sessions_with_adds,
+		COUNT(DISTINCT CASE WHEN type = 'remove_from_cart' THEN session_id END) as sessions_with_removes
 	FROM {$table_name}
-	WHERE type IN ('add_to_cart', 'remove_from_cart')"
+	WHERE type IN ('add_to_cart', 'remove_from_cart')
+	AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
 );
+
+// Calculate cart abandonment rate
+$cart_abandonment_rate = 0;
+if ($cart_abandonment->sessions_with_adds > 0) {
+	$cart_abandonment_rate = round(
+		(($cart_abandonment->sessions_with_adds - $cart_abandonment->sessions_with_removes) / $cart_abandonment->sessions_with_adds) * 100,
+		1
+	);
+}
+
+// Get cart analytics stats
+$cart_stats = array(
+	'total_sessions' => $cart_abandonment->total_sessions,
+	'items_added' => $cart_abandonment->added,
+	'items_removed' => $cart_abandonment->removed,
+	'abandonment_rate' => $cart_abandonment_rate
+);
+
+error_log('CFA: Cart Analytics Data: ' . print_r($cart_stats, true));
 
 // Get checkout completion data.
 $checkout_data = $wpdb->get_row(
@@ -164,16 +186,20 @@ function cfa_get_badge_class( $count ) {
 			<h2><?php esc_html_e( 'Cart Analytics', 'checkout-friction-analyzer' ); ?></h2>
 			<div class="cfa-stats">
 				<div class="cfa-stat">
-					<span class="cfa-stat-value"><?php echo esc_html( $cart_abandonment->total ); ?></span>
-					<span class="cfa-stat-label"><?php esc_html_e( 'Total Cart Actions', 'checkout-friction-analyzer' ); ?></span>
+					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['total_sessions']); ?></span>
+					<span class="cfa-stat-label"><?php esc_html_e('Total Sessions', 'checkout-friction-analyzer'); ?></span>
 				</div>
 				<div class="cfa-stat">
-					<span class="cfa-stat-value"><?php echo esc_html( $cart_abandonment->added ); ?></span>
-					<span class="cfa-stat-label"><?php esc_html_e( 'Items Added', 'checkout-friction-analyzer' ); ?></span>
+					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['items_added']); ?></span>
+					<span class="cfa-stat-label"><?php esc_html_e('Items Added', 'checkout-friction-analyzer'); ?></span>
 				</div>
 				<div class="cfa-stat">
-					<span class="cfa-stat-value"><?php echo esc_html( $cart_abandonment->removed ); ?></span>
-					<span class="cfa-stat-label"><?php esc_html_e( 'Items Removed', 'checkout-friction-analyzer' ); ?></span>
+					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['items_removed']); ?></span>
+					<span class="cfa-stat-label"><?php esc_html_e('Items Removed', 'checkout-friction-analyzer'); ?></span>
+				</div>
+				<div class="cfa-stat">
+					<span class="cfa-stat-value"><?php echo esc_html($cart_stats['abandonment_rate']); ?>%</span>
+					<span class="cfa-stat-label"><?php esc_html_e('Cart Abandonment Rate', 'checkout-friction-analyzer'); ?></span>
 				</div>
 			</div>
 		</div>
@@ -219,77 +245,127 @@ function cfa_get_badge_class( $count ) {
 		</div>
 		<!-- Top Validation Errors -->
 		<div class="cfa-card">
-			<h2><?php esc_html_e( 'Top Validation Errors', 'checkout-friction-analyzer' ); ?></h2>
-			<?php if ( ! empty( $formatted_validation_errors ) ) : ?>
+			<h2><?php esc_html_e('Top Validation Errors', 'checkout-friction-analyzer'); ?></h2>
+			<?php
+			// Fetch validation errors with proper aggregation
+			$validation_errors_query = $wpdb->prepare(
+				"SELECT 
+					JSON_EXTRACT(data, '$.errors') as errors_json,
+					COUNT(*) as count
+				FROM {$table_name}
+				WHERE type = %s
+				AND JSON_LENGTH(JSON_EXTRACT(data, '$.errors')) > 0
+				GROUP BY JSON_EXTRACT(data, '$.errors')
+				ORDER BY count DESC
+				LIMIT 10",
+				'validation_error'
+			);
+			
+			$validation_errors_data = $wpdb->get_results($validation_errors_query);
+			
+			// Process and aggregate error data
+			$error_counts = array();
+			foreach ($validation_errors_data as $error_data) {
+				$errors = json_decode($error_data->errors_json, true);
+				if (is_array($errors)) {
+					foreach ($errors as $error) {
+						// Clean up the error message
+						$error = trim(str_replace(array("\n", "\t"), '', $error));
+						if (!empty($error)) {
+							// Aggregate counts
+							if (!isset($error_counts[$error])) {
+								$error_counts[$error] = 0;
+							}
+							$error_counts[$error] += $error_data->count;
+						}
+					}
+				}
+			}
+			
+			// Sort by count in descending order
+			arsort($error_counts);
+			
+			// Take top 5 errors
+			$error_counts = array_slice($error_counts, 0, 5, true);
+			?>
+			
+			<?php if (!empty($error_counts)) : ?>
 				<ul class="cfa-error-list">
-					<?php foreach ( $formatted_validation_errors as $error ) : ?>
+					<?php foreach ($error_counts as $error => $count) : ?>
 						<li>
-							<span class="<?php echo esc_attr( cfa_get_badge_class( $error->count ) ); ?>"><?php echo esc_html( $error->count ); ?></span>
+							<span class="<?php echo esc_attr(cfa_get_badge_class($count)); ?>">
+								<?php echo esc_html($count); ?>
+							</span>
 							<span class="cfa-error-message">
-								<?php 
-								if (is_array($error->errors)) {
-									foreach ($error->errors as $err_msg) {
-										echo '<div>' . esc_html($err_msg) . '</div>';
-									}
-								} else {
-									echo esc_html($error->errors);
-								}
-								?>
+								<?php echo esc_html($error); ?>
 							</span>
 						</li>
 					<?php endforeach; ?>
 				</ul>
 			<?php else : ?>
-				<p><?php esc_html_e( 'No validation errors recorded.', 'checkout-friction-analyzer' ); ?></p>
+				<p><?php esc_html_e('No validation errors recorded.', 'checkout-friction-analyzer'); ?></p>
 			<?php endif; ?>
 		</div>
 		<!-- Top Abandoned Fields -->
 		<div class="cfa-card">
-			<h2><?php esc_html_e( 'Top Abandoned Fields', 'checkout-friction-analyzer' ); ?></h2>
+			<h2><?php esc_html_e('Top Abandoned Fields', 'checkout-friction-analyzer'); ?></h2>
 			<?php
-			// Fetch and format abandoned fields data
+			// Fetch and format abandoned fields data with proper aggregation
 			$abandoned_fields_query = $wpdb->prepare(
 				"SELECT 
-					JSON_EXTRACT(data, '$.abandoned_fields') as fields,
+					JSON_EXTRACT(data, '$.abandoned_fields') as fields_json,
 					COUNT(*) as count
 				FROM {$table_name}
 				WHERE type = %s
 				AND JSON_LENGTH(JSON_EXTRACT(data, '$.abandoned_fields')) > 0
 				GROUP BY JSON_EXTRACT(data, '$.abandoned_fields')
 				ORDER BY count DESC
-				LIMIT 5",
+				LIMIT 10",
 				'form_abandonment'
 			);
 			
 			$abandoned_fields_data = $wpdb->get_results($abandoned_fields_query);
+			
+			// Process and aggregate field data
+			$field_counts = array();
+			foreach ($abandoned_fields_data as $field_data) {
+				$fields = json_decode($field_data->fields_json, true);
+				if (is_array($fields)) {
+					foreach ($fields as $field) {
+						$field_name = isset($field['name']) ? $field['name'] : (isset($field['id']) ? $field['id'] : '');
+						if (!empty($field_name)) {
+							// Convert field name to readable format
+							$readable_name = ucwords(str_replace(array('_', '-'), ' ', $field_name));
+							
+							// Aggregate counts
+							if (!isset($field_counts[$readable_name])) {
+								$field_counts[$readable_name] = 0;
+							}
+							$field_counts[$readable_name] += $field_data->count;
+						}
+					}
+				}
+			}
+			
+			// Sort by count in descending order
+			arsort($field_counts);
+			
+			// Take top 5 fields
+			$field_counts = array_slice($field_counts, 0, 5, true);
 			?>
 			
-			<?php if (!empty($abandoned_fields_data)) : ?>
+			<?php if (!empty($field_counts)) : ?>
 				<ul class="cfa-error-list">
-					<?php foreach ($abandoned_fields_data as $field_data) : 
-						$fields = json_decode($field_data->fields, true);
-						if (is_array($fields)) {
-							foreach ($fields as $field) :
-								$field_name = isset($field['name']) ? $field['name'] : (isset($field['id']) ? $field['id'] : '');
-								if (!empty($field_name)) :
-									?>
-									<li>
-										<span class="<?php echo esc_attr(cfa_get_badge_class($field_data->count)); ?>">
-											<?php echo esc_html($field_data->count); ?>
-										</span>
-										<span class="cfa-error-message">
-											<?php 
-											// Convert field name to readable format
-											$readable_name = ucwords(str_replace(array('_', '-'), ' ', $field_name));
-											echo esc_html($readable_name);
-											?>
-										</span>
-									</li>
-									<?php
-								endif;
-							endforeach;
-						}
-					endforeach; ?>
+					<?php foreach ($field_counts as $field_name => $count) : ?>
+						<li>
+							<span class="<?php echo esc_attr(cfa_get_badge_class($count)); ?>">
+								<?php echo esc_html($count); ?>
+							</span>
+							<span class="cfa-error-message">
+								<?php echo esc_html($field_name); ?>
+							</span>
+						</li>
+					<?php endforeach; ?>
 				</ul>
 			<?php else : ?>
 				<p><?php esc_html_e('No abandoned fields recorded.', 'checkout-friction-analyzer'); ?></p>
