@@ -8,12 +8,14 @@
  * Author URI: https://yourwebsite.com
  * Text Domain: checkout-friction-analyzer
  * Domain Path: /languages
- * Requires at least: 5.0
+ * Requires at least: 5.8
  * Requires PHP: 7.4
  * WC requires at least: 6.0
  * WC tested up to: 8.0
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ *
+ * @package Checkout_Friction_Analyzer
  */
 
 // Exit if accessed directly.
@@ -26,6 +28,13 @@ define( 'CFA_VERSION', '1.0.0' );
 define( 'CFA_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CFA_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'CFA_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+
+// Add HPOS compatibility
+add_action('before_woocommerce_init', function() {
+	if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+		\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+	}
+});
 
 // Autoloader.
 spl_autoload_register( function ( $class ) {

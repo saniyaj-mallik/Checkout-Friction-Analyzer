@@ -49,33 +49,85 @@
                     label: 'Abandonment Rate',
                     data: data,
                     borderColor: '#dc3545',
-                    tension: 0.1,
-                    fill: false
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#dc3545',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
                         max: 100,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)',
+                            drawBorder: false
+                        },
                         ticks: {
                             callback: function(value) {
                                 return value + '%';
-                            }
+                            },
+                            font: {
+                                size: 12
+                            },
+                            color: '#646970'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            font: {
+                                size: 12
+                            },
+                            color: '#646970'
                         }
                     }
                 },
                 plugins: {
                     legend: {
                         display: true,
-                        position: 'top'
+                        position: 'top',
+                        labels: {
+                            font: {
+                                size: 14,
+                                weight: '600'
+                            },
+                            color: '#1d2327',
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
                     },
                     tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleFont: {
+                            size: 14,
+                            weight: '600'
+                        },
+                        bodyFont: {
+                            size: 13
+                        },
+                        padding: 12,
+                        cornerRadius: 4,
                         callbacks: {
                             label: function(context) {
                                 return 'Abandonment Rate: ' + context.raw + '%';
+                            },
+                            title: function(context) {
+                                return 'Date: ' + context[0].label;
                             }
                         }
                     }

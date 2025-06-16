@@ -346,15 +346,22 @@ class Core {
 	 *
 	 * @param WC_Order $order Order object.
 	 */
-	public function track_order_created ( $order ) {
-		$this->log_friction_point(
-			'order_created',
-			array(
-				'order_id'    => $order->get_id(),
-				'order_total' => $order->get_total(),
-				'items'       => count( $order->get_items() ),
-			)
+	public function track_order_created($order) {
+		// Get order ID using HPOS-compatible method
+		$order_id = $order->get_id();
+		
+		// Get order data using HPOS-compatible methods
+		$order_data = array(
+			'order_id' => $order_id,
+			'order_total' => $order->get_total(),
+			'items' => count($order->get_items()),
+			'session_id' => WC()->session ? WC()->session->get('cfa_session_id') : null,
+			'timestamp' => current_time('mysql')
 		);
+
+		error_log('CFA: Tracking order created - Order ID: ' . $order_id);
+		
+		$this->log_friction_point('order_created', $order_data);
 	}
 
 	/**
@@ -378,14 +385,23 @@ class Core {
 	 *
 	 * @param int $order_id Order ID.
 	 */
-	public function track_order_processed ( $order_id ) {
-		// Track successful order completion
-		$this->log_friction_point(
-			'order_completed',
-			array(
-				'order_id' => $order_id,
-			)
+	public function track_order_processed($order_id) {
+		// Get order using HPOS-compatible method
+		$order = wc_get_order($order_id);
+		if (!$order) {
+			error_log('CFA: Warning - Order not found for ID: ' . $order_id);
+			return;
+		}
+
+		$order_data = array(
+			'order_id' => $order_id,
+			'session_id' => WC()->session ? WC()->session->get('cfa_session_id') : null,
+			'timestamp' => current_time('mysql')
 		);
+
+		error_log('CFA: Tracking order processed - Order ID: ' . $order_id);
+		
+		$this->log_friction_point('order_completed', $order_data);
 	}
 
 	/**
